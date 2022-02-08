@@ -41,7 +41,7 @@ class PPPMStep(core.FastPMStep):
         delta_k = rho.r2c(out=Ellipsis)
 
         state.F[...] = layout.gather(
-                self.solver.compute_longrange(X1, delta_k, factor=1.5 * self.cosmology.Om0)
+                self.solver.compute_longrange(X1, delta_k, factor=1.5 * self.cosmology.Omega0_m)
                 )
 
         tree = KDTree(X1, boxsize=self.pm.BoxSize)
@@ -52,4 +52,3 @@ class PPPMStep(core.FastPMStep):
             )
         state.F[...] += Fs
         state.a['F'] = af
-

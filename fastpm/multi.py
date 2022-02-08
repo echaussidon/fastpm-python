@@ -1,8 +1,9 @@
+## NEED TO BE UPDATED with cosmoprimo
+
 import numpy
 
 from pmesh.pm import ParticleMesh
 from .background import PerturbationGrowth
-from nbodykit.cosmology import Cosmology
 
 from .state import StateVector, Matter, Baryon, CDM, NCDM
 
@@ -13,8 +14,9 @@ class Solver(object):
     def __init__(self, pm, cosmology, B=1):
         """
         """
-        if not isinstance(cosmology, Cosmology):
-            raise TypeError("only nbodykit.cosmology object is supported")
+        #if not isinstance(cosmology, Cosmology):
+        #    raise TypeError("only nbodykit.cosmology object is supported")
+        # We use cosmoprimo.cosmology.Cosmology
 
         fpm = ParticleMesh(Nmesh=pm.Nmesh * B, BoxSize=pm.BoxSize, dtype=pm.dtype, comm=pm.comm, resampler=pm.resampler)
         self.pm = pm
@@ -182,10 +184,11 @@ class FastPMStep(object):
         return dict(delta_k=delta_k)
 
 def get_species_transfer_function_from_class(cosmology, z):
-    """ compuate the species transfer functions (d and dd/da)
+    """ compuate the species transfer functions (d and dd/da)    ## ICI AVEC LES GAUGEs
         from the result of class.
     """
-    tf = cosmology.get_transfer(z=z)
+    tf = cosmology.get_transfer(z=z) ##CICI
+    print("aaaaaaaa")
     d = {}
 
     # flip the sign to meet preserve the phase of the
@@ -210,4 +213,3 @@ def get_species_transfer_function_from_class(cosmology, z):
     for name in d:
         e[name] = lambda k, x=tf['k'], y=d[name]: numpy.interp(k, x, y, left=0, right=0)
     return e
-

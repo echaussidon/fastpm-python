@@ -8,9 +8,15 @@ from .core import leapfrog
 from .core import autostages
 from .background import PerturbationGrowth
 
-from nbodykit.cosmology import Planck15
-from nbodykit.cosmology import EHPower
-from nbodykit.cosmology import Cosmology
+from cosmoprimo.fiducial import DESI
+# faudra le mettre ailleur mais pour l'instant tant que cosmo_fid.Omega0_m n'est pas corrigé on attend.
+cosmo_fid = DESI('class')
+cosmo_fid.Omega0_m = cosmo_fid.Omega_m(0.)
+# on definit le spectre de puissance --> attention to_1D() raise une erreur mega relou...
+linear_power_spectrum_interp = cosmo_fid.get_fourier().pk_interpolator(extrap_kmin=1e-8, extrap_kmax=1e3)
+def linear_power_spectrum(k):
+    return linear_power_spectrum_interp(k, z=0.)
+
 from nbodykit.lab import FFTPower, FieldMesh
 import numpy
 
@@ -26,21 +32,15 @@ class Config(dict):
         self['seed'] = 1985
         self['pm_nc_factor'] = 2
         self['resampler'] = 'tsc'
-        self['cosmology'] = Planck15
-        self['powerspectrum'] = EHPower(Planck15, 0)
+        self['cosmology'] = cosmo_fid
+        self['powerspectrum'] = linear_power_spectrum
         self['unitary'] = False
         self['stages'] = numpy.linspace(0.1, 1.0, 5, endpoint=True)
         self['aout'] = [1.0]
 
         local = {} # these names will be usable in the config file
-        local['EHPower'] = EHPower
-        local['Cosmology'] = Cosmology
-        local['Planck15'] = Planck15
         local['linspace'] = numpy.linspace
         local['autostages'] = autostages
-
-        import nbodykit.lab as nlab
-        local['nlab'] = nlab
 
         names = set(self.__dict__.keys())
 
@@ -84,10 +84,10 @@ def main(args=None):
         if config.pm.comm.rank == 0:
             print('Writing matter power spectrum at %s' % path)
             # only root rank saves
-            numpy.savetxt(path, 
+            numpy.savetxt(path,
                 numpy.array([
                   r.power['k'], r.power['power'].real, r.power['modes'],
-                  r.power['power'].real / solver.cosmology.scale_independent_growth_factor(1.0 / a - 1) ** 2,
+                  r.power['power'].real / solver.cosmology.growth_factor(1.0 / a - 1) ** 2,
                 ]).T,
                 comments='# k p N p/D**2')
 

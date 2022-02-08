@@ -211,7 +211,7 @@ class MatterDominated(Perturbation):
 
     This is usually referred to the single fluid approximation as well.
 
-    The result here is accurate upto numerical precision. If Omega0_m 
+    The result here is accurate upto numerical precision. If Omega0_m
 
     Parameters
     ----------
@@ -270,23 +270,20 @@ class RadiationDominated(Perturbation):
 
     Parameters
     ----------
-    cosmo: :class:`~nbodykit.cosmology.core.Cosmology`
-        a astropy Cosmology like object.
+    cosmo: :class:`~cosmoprimo.cosmology.Cosmology`
+        a cosmoprimo Cosmology like object.
 
     a : array_like
         a list of time steps where the factors are exact.
         other a values are interpolated.
     """
     def __init__(self, cosmo, a=None, a_normalize=1.0):
-#        assert cosmo.Ogamma0 == 0
-#        assert cosmo.Onu0 == 0
-
         self._cosmo = cosmo
-        self.Omega0_m = cosmo.Om0
+        self.Omega0_m = cosmo.Omega0_m
 
         # Om0 is added for backward compatiblity
         self.Om0 = self.Omega0_m
-        self.Omega0_gamma = cosmo.Ogamma0
+        self.Omega0_gamma = cosmo.Omega0_g
 
         Perturbation.__init__(self, a, a_normalize)
 
@@ -319,8 +316,7 @@ class RadiationDominated(Perturbation):
 
     def Om(self, a):
         z = 1./a-1
-        return self._cosmo.Omega_b(z) + self._cosmo.Omega_cdm(z) # non-relativistic 
+        return self._cosmo.Omega_b(z) + self._cosmo.Omega_cdm(z) # non-relativistic
 
 
 PerturbationGrowth = RadiationDominated
-
