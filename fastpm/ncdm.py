@@ -1,5 +1,3 @@
-## NEED TO BE UPDATED WITH COSMOPRIMO
-
 import numpy
 
 from . import core
@@ -46,10 +44,9 @@ class FastPMStep(core.FastPMStep):
 
 def phase_space_linear_ncdm(delta_k, cosmology, ac):
     z = 1 / ac - 1
-    tf = cosmology.get_transfer(z=z) ## UCUUUU
-    print("aaaaaa")
+    tf = cosmology.get_transfer().table(z=z)
 
-    ktf = tf['k']
+    ktf = tf['k (h/Mpc)']
 
     d_cdm = tf['d_cdm']
     d_b = tf['d_b']

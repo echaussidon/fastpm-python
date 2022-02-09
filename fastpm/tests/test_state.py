@@ -2,9 +2,7 @@ from fastpm.state import StateVector, Matter, Baryon, CDM, NCDM
 from runtests.mpi import MPITest
 
 from cosmoprimo.fiducial import DESI
-# faudra le mettre ailleur mais pour l'instant tant que cosmo_fid.Omega0_m n'est pas corrigé on attend.
 cosmo_fid = DESI('class')
-cosmo_fid.Omega0_m = cosmo_fid.Omega_m(0.)
 
 import numpy
 

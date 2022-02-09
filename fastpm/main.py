@@ -9,15 +9,13 @@ from .core import autostages
 from .background import PerturbationGrowth
 
 from cosmoprimo.fiducial import DESI
-# faudra le mettre ailleur mais pour l'instant tant que cosmo_fid.Omega0_m n'est pas corrigé on attend.
-cosmo_fid = DESI('class')
-cosmo_fid.Omega0_m = cosmo_fid.Omega_m(0.)
+
 # on definit le spectre de puissance --> attention to_1D() raise une erreur mega relou...
 linear_power_spectrum_interp = cosmo_fid.get_fourier().pk_interpolator(extrap_kmin=1e-8, extrap_kmax=1e3)
 def linear_power_spectrum(k):
     return linear_power_spectrum_interp(k, z=0.)
 
-from nbodykit.lab import FFTPower, FieldMesh
+from pypower import MeshFFTPower
 import numpy
 
 class Config(dict):
@@ -32,7 +30,7 @@ class Config(dict):
         self['seed'] = 1985
         self['pm_nc_factor'] = 2
         self['resampler'] = 'tsc'
-        self['cosmology'] = cosmo_fid
+        self['cosmology'] = DESI('class')
         self['powerspectrum'] = linear_power_spectrum
         self['unitary'] = False
         self['stages'] = numpy.linspace(0.1, 1.0, 5, endpoint=True)
@@ -67,20 +65,22 @@ class Config(dict):
         return os.path.join(self.prefix, filename)
 
 def main(args=None):
-    ns = ap.parse_args(args)
-    config = Config(ns.config)
-
-    solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
-    whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
-    dlin = solver.linear(whitenoise, Pk=lambda k : config['powerspectrum'](k))
-
-    Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
-
-    state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
+    # Supress the logger from pypower
+    import logging
+    logging.getLogger("MeshFFTPower").setLevel(logging.ERROR)
 
     def write_power(d, path, a):
-        meshsource = FieldMesh(d)
-        r = FFTPower(meshsource, mode='1d')
+        """
+        Compute the power spectrum at specific scale factor during the nbody computation.
+        """
+        boxsize = 1380 # cf config file or default value
+        kedges = np.linspace(0.0001, 0.2, 100)
+
+## FINIR ICII
+
+## ILLUSTER LE PROBLEME AVEC LINEAR AU DEBUT 88
+
+        poles = MeshFFTPower(d.c2r(), edges=kedges, ells=(0, 2, 4), boxcenter=boxsize//2, compensations='tsc', shotnoise=0.0, wnorm=None).poles
         if config.pm.comm.rank == 0:
             print('Writing matter power spectrum at %s' % path)
             # only root rank saves
@@ -91,9 +91,10 @@ def main(args=None):
                 ]).T,
                 comments='# k p N p/D**2')
 
-    write_power(dlin, config.makepath('power-linear.txt'), a=1.0)
-
     def monitor(action, ai, ac, af, state, event):
+        """
+        Monitor function. Action to do for different steps of the computation.
+        """
         if config.pm.comm.rank == 0:
             print('Step %s %06.4f - (%06.4f) -> %06.4f' %( action, ai, ac, af),
                   'S %(S)06.4f P %(P)06.4f F %(F)06.4f' % (state.a))
@@ -111,6 +112,23 @@ def main(args=None):
                     print('Writing a snapshot at %s' % path)
                 # collective save
                 state.save(path, attrs=config)
+
+
+    ns = ap.parse_args(args)
+    config = Config(ns.config)
+
+    solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
+    whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
+    dlin = solver.linear(whitenoise, Pk=lambda k : config['powerspectrum'](k))
+
+    Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
+
+    state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
+
+
+
+    write_power(dlin, config.makepath('power-linear.txt'), a=1.0)
+
 
     solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
 
