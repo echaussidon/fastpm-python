@@ -1,7 +1,7 @@
 import numpy
 
 H0 = 100. # in km/s / Mpc/h units
-G = 43007.1 
+G = 43007.1
 
 class Species(object):
     def __init__(self, cosmology, BoxSize, Q, comm):
@@ -21,7 +21,7 @@ class Species(object):
         self.RHO = numpy.zeros_like(self.Q[..., 0])
         self.a = dict(S=None, P=None, F=None)
 
-    def Omega(self, a): 
+    def Omega(self, a):
         """ default is matter, override for other species; time dependent for neutrinos """
         raise NotImplementedError
 
@@ -87,20 +87,19 @@ class Species(object):
 
 class Matter(Species):
     def Omega(self, a):
-        return self.cosmology.Om(z=1. / a - 1)
+        return self.cosmology.Omega_m(z=1. / a - 1)
 
 class Baryon(Species):
     def Omega(self, a):
-        return self.cosmology.Ob(z=1. / a - 1)
+        return self.cosmology.Omega_b(z=1. / a - 1)
 
 class CDM(Species):
     def Omega(self, a):
-        return self.cosmology.Odm(z=1. / a - 1)
+        return self.cosmology.Omega_cdm(z=1. / a - 1)
 
 class NCDM(Species):
     def Omega(self, a):
-        # FIXME: using Omega_ncdm after switching to new nbodykit cosmology.
-        return self.cosmology.Onu(z=1. / a - 1)
+        return self.cosmology.Omega_ncdm(z=1. / a - 1)
 
 from collections import OrderedDict
 class StateVector(object):
@@ -143,9 +142,7 @@ class StateVector(object):
         a = self.a['S']
         with FileMPI(self.comm, filename, create=True) as ff:
             with ff.create('Header') as bb:
-                keylist = ['Om0', 'Tcmb0', 'Neff', 'Ob0', 'Ode0']
-                if getattr(self.cosmology, 'm_nu', None) is not None:
-                    keylist.insert(3,'m_nu')
+                keylist = ['Omega0_m', 'T0_cmb', 'N_eff', 'Omega0_b', 'Omega0_Lambda']
                 for key in keylist:
                     bb.attrs[key] = getattr(self.cosmology, key)
                 bb.attrs['Time'] = a

@@ -1,8 +1,9 @@
+## NEED TO BE UPDATED with cosmoprimo (pb avec h_prime)
+
 import numpy
 
 from pmesh.pm import ParticleMesh
 from .background import PerturbationGrowth
-from nbodykit.cosmology import Cosmology
 
 from .state import StateVector, Matter, Baryon, CDM, NCDM
 
@@ -13,8 +14,9 @@ class Solver(object):
     def __init__(self, pm, cosmology, B=1):
         """
         """
-        if not isinstance(cosmology, Cosmology):
-            raise TypeError("only nbodykit.cosmology object is supported")
+        #if not isinstance(cosmology, Cosmology):
+        #    raise TypeError("only nbodykit.cosmology object is supported")
+        # We use cosmoprimo.cosmology.Cosmology
 
         fpm = ParticleMesh(Nmesh=pm.Nmesh * B, BoxSize=pm.BoxSize, dtype=pm.dtype, comm=pm.comm, resampler=pm.resampler)
         self.pm = pm
@@ -185,7 +187,7 @@ def get_species_transfer_function_from_class(cosmology, z):
     """ compuate the species transfer functions (d and dd/da)
         from the result of class.
     """
-    tf = cosmology.get_transfer(z=z)
+    tf = cosmology.get_transfer().table(z=z)
     d = {}
 
     # flip the sign to meet preserve the phase of the
@@ -200,14 +202,13 @@ def get_species_transfer_function_from_class(cosmology, z):
         d['dd_b'] = tf['t_b'] * fac
         d['dd_ncdm[0]'] = tf['t_ncdm[0]'] * fac
     elif cosmology.gauge == 'synchronous':
-        fac = 1.0 / (cosmology.hubble_function(z) * (1. + z) ** -2)
+        fac = 1.0 / (cosmology.hubble_function(z) * (1. + z) ** -2)    ### ON A APS H_Prime !!
         d['dd_cdm'] = 0.5 * tf['h_prime'] * fac
         d['dd_b'] = (0.5 * tf['h_prime'] + tf['t_b']) * fac
         d['dd_ncdm[0]'] = (0.5 * tf['h_prime'] + tf['t_ncdm[0]']) * fac
 
-    k = tf['k'].copy()
+    k = tf['k (h/Mpc)'].copy()
     e = {}
     for name in d:
-        e[name] = lambda k, x=tf['k'], y=d[name]: numpy.interp(k, x, y, left=0, right=0)
+        e[name] = lambda k, x=tf['k (h/Mpc)'], y=d[name]: numpy.interp(k, x, y, left=0, right=0)
     return e
-

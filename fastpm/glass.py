@@ -3,7 +3,6 @@ import numpy
 from .core import leapfrog
 
 from pmesh.pm import ParticleMesh
-from nbodykit.cosmology import Planck15
 
 def generate_glass_particle_grid(pm, seed, B=2, spread=3.0, N=3):
     """
@@ -52,7 +51,8 @@ class Solver(core.Solver):
                 dtype=pm.dtype, comm=pm.comm, resampler=pm.resampler)
         self.pm = pm
         self.fpm = fpm
-        self.cosmology = Planck15 # any will do
+        from cosmoprimo.fiducial import DESI
+        self.cosmology = DESI(engine='class') # any will do
 
     @property
     def nbodystep(self):

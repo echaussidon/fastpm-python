@@ -2,11 +2,16 @@ from fastpm.core import leapfrog, Solver, autostages
 from fastpm.background import MatterDominated
 
 from pmesh.pm import ParticleMesh
-from nbodykit.cosmology import Planck15, LinearPower
 import numpy
 from numpy.testing import assert_allclose
 
+from cosmoprimo.fiducial import DESI
+
+
+cosmo_fid = DESI('class')
+
 pm = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8])
+
 
 def test_autostages():
     for knots in [
@@ -30,12 +35,12 @@ def test_leapfrog():
     assert len(l) == 1
 
 def test_solver():
-    Plin = LinearPower(Planck15, redshift=0, transfer='EisensteinHu')
-    solver = Solver(pm, Planck15, B=1)
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
+    solver = Solver(pm, cosmo_fid, B=1)
     Q = pm.generate_uniform_particle_grid(shift=0)
 
     wn = solver.whitenoise(1234)
-    dlin = solver.linear(wn, lambda k: Plin(k))
+    dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
     state = solver.lpt(dlin, Q, a=1.0, order=2)
 
@@ -44,17 +49,17 @@ def test_solver():
     dnonlin.save('nonlin')
 
 def test_lpt():
-    Plin = LinearPower(Planck15, redshift=0, transfer='EisensteinHu')
-    solver = Solver(pm, Planck15, B=1)
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
+    solver = Solver(pm, cosmo_fid, B=1)
     Q = pm.generate_uniform_particle_grid(shift=0)
 
     wn = solver.whitenoise(1234)
-    dlin = solver.linear(wn, lambda k: Plin(k))
+    dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
     state1 = solver.lpt(dlin, Q, a=0.01, order=1)
     state2 = solver.lpt(dlin, Q, a=1.0, order=1)
 
-    pt = MatterDominated(Planck15.Om0, a=[0.01, 1.0], a_normalize=1.0)
+    pt = MatterDominated(cosmo_fid.Omega0_m, a=[0.01, 1.0], a_normalize=1.0)
 #    print((state2.P[...] / state1.P[...]))
     print((state2.P[...] - state1.P[...]) / state1.F[...])
 
@@ -68,15 +73,15 @@ def test_solver_convergence(comm):
     pm = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8], comm=comm)
     pm_ref = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8], comm=MPI.COMM_SELF)
 
-    Plin = LinearPower(Planck15, redshift=0, transfer='EisensteinHu')
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
 
     Q = pm_ref.generate_uniform_particle_grid(shift=0)
 
     def solve(pm):
-        solver = Solver(pm, Planck15, B=1)
+        solver = Solver(pm, cosmo_fid, B=1)
         q = numpy.array_split(Q, pm.comm.size)[pm.comm.rank]
         wn = solver.whitenoise(1234)
-        dlin = solver.linear(wn, lambda k: Plin(k))
+        dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
         state = solver.lpt(dlin, q, a=0.1, order=2)
         state = solver.nbody(state, leapfrog([0.1, 0.5, 1.0]))

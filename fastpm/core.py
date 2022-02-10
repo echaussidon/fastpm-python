@@ -2,7 +2,7 @@ import numpy
 
 from pmesh.pm import ParticleMesh
 from .background import MatterDominated
-from nbodykit.cosmology import Cosmology
+
 
 class StateVector(object):
     def __init__(self, solver, Q):
@@ -15,7 +15,7 @@ class StateVector(object):
 
         self.H0 = 100. # in km/s / Mpc/h units
         # G * (mass of a particle)
-        self.GM0 = self.H0 ** 2 / ( 4 * numpy.pi ) * 1.5 * self.cosmology.Om0 * self.pm.BoxSize.prod() / self.csize
+        self.GM0 = self.H0 ** 2 / ( 4 * numpy.pi ) * 1.5 * self.cosmology.Omega0_m * self.pm.BoxSize.prod() / self.csize
 
         self.S = numpy.zeros_like(self.Q)
         self.P = numpy.zeros_like(self.Q)
@@ -54,13 +54,13 @@ class StateVector(object):
         real.paint(x, layout=layout, hold=False)
         return real
 
-    def to_catalog(self, **kwargs):
-        from nbodykit.lab import ArrayCatalog
-        source = ArrayCatalog({'Position' : self.X, 'Velocity' : self.V},
-            BoxSize=self.pm.BoxSize, Om0=self.cosmology.Om0,
-            Time=self.a['S'], comm=self.pm.comm, **kwargs
-        )
-        return source
+#    def to_catalog(self, **kwargs):
+#        from nbodykit.lab import ArrayCatalog
+#        source = ArrayCatalog({'Position' : self.X, 'Velocity' : self.V},
+#            BoxSize=self.pm.BoxSize, Om0=self.cosmology.Omega0_m,
+#            Time=self.a['S'], comm=self.pm.comm, **kwargs
+#        )
+#        return source
 
     def save(self, filename, attrs={}):
         from bigfile import FileMPI
@@ -68,9 +68,7 @@ class StateVector(object):
 
         with FileMPI(self.pm.comm, filename, create=True) as ff:
             with ff.create('Header') as bb:
-                keylist = ['Om0', 'Tcmb0', 'Neff', 'Ob0', 'Ode0']
-                if getattr(self.cosmology, 'm_nu', None) is not None:
-                    keylist.insert(3,'m_nu')
+                keylist = ['Omega0_m', 'T0_cmb', 'N_eff', 'Omega0_b', 'Omega0_Lambda']
                 for key in keylist:
                     bb.attrs[key] = getattr(self.cosmology, key)
                 bb.attrs['Time'] = a
@@ -96,8 +94,9 @@ class Solver(object):
                 The growth function will be calibrated such that at a_linear D1 == 0.
 
         """
-        if not isinstance(cosmology, Cosmology):
-            raise TypeError("only nbodykit.cosmology object is supported")
+        #if not isinstance(cosmology, Cosmology):
+        #    raise TypeError("only nbodykit.cosmology object is supported")
+        # Use cosmoprimo.cosmology.Cosmology
 
         fpm = ParticleMesh(Nmesh=pm.Nmesh * B, BoxSize=pm.BoxSize, dtype=pm.dtype, comm=pm.comm, resampler=pm.resampler)
         self.pm = pm
@@ -124,7 +123,7 @@ class Solver(object):
         from .force.lpt import lpt1, lpt2source
 
         state = StateVector(self, Q)
-        pt = MatterDominated(self.cosmology.Om0, a=[a], a_normalize=self.a_linear)
+        pt = MatterDominated(self.cosmology.Omega0_m, a=[a], a_normalize=self.a_linear)
         DX1 = pt.D1(a) * lpt1(linear, Q)
 
         V1 = a ** 2 * pt.f1(a) * pt.E(a) * DX1
@@ -167,14 +166,14 @@ class FastPMStep(object):
 
     def Kick(self, state, ai, ac, af):
         assert ac == state.a['F']
-        pt = MatterDominated(self.cosmology.Om0, a=[ai, ac, af], a_normalize=self.solver.a_linear)
+        pt = MatterDominated(self.cosmology.Omega0_m, a=[ai, ac, af], a_normalize=self.solver.a_linear)
         fac = 1 / (ac ** 2 * pt.E(ac)) * (pt.Gf(af) - pt.Gf(ai)) / pt.gf(ac)
         state.P[...] = state.P[...] + fac * state.F[...]
         state.a['P'] = af
 
     def Drift(self, state, ai, ac, af):
         assert ac == state.a['P']
-        pt = MatterDominated(self.cosmology.Om0, a=[ai, ac, af], a_normalize=self.solver.a_linear)
+        pt = MatterDominated(self.cosmology.Omega0_m, a=[ai, ac, af], a_normalize=self.solver.a_linear)
         fac = 1 / (ac ** 3 * pt.E(ac)) * (pt.Gp(af) - pt.Gp(ai)) / pt.gp(ac)
         state.S[...] = state.S[...] + fac * state.P[...]
         state.a['S'] = af
@@ -204,7 +203,7 @@ class FastPMStep(object):
 
         delta_k = rho.r2c(out=Ellipsis)
 
-        state.F[...] = layout.gather(longrange(X1, delta_k, split=0, factor=1.5 * self.cosmology.Om0))
+        state.F[...] = layout.gather(longrange(X1, delta_k, split=0, factor=1.5 * self.cosmology.Omega0_m))
 
         state.a['F'] = af
         return dict(delta_k=delta_k)

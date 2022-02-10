@@ -36,7 +36,7 @@ class FastPMStep(core.FastPMStep):
 
         delta_k = phase_space_linear_ncdm(delta_k, self.cosmology, ac)
 
-        state.F[...] = layout.gather(longrange(X1, delta_k, split=0, factor=1.5 * self.cosmology.Om0))
+        state.F[...] = layout.gather(longrange(X1, delta_k, split=0, factor=1.5 * self.cosmology.Omega0_m))
 
         state.a['F'] = af
         return dict(delta_k=delta_k)
@@ -44,9 +44,9 @@ class FastPMStep(core.FastPMStep):
 
 def phase_space_linear_ncdm(delta_k, cosmology, ac):
     z = 1 / ac - 1
-    tf = cosmology.get_transfer(z=z)
+    tf = cosmology.get_transfer().table(z=z)
 
-    ktf = tf['k']
+    ktf = tf['k (h/Mpc)']
 
     d_cdm = tf['d_cdm']
     d_b = tf['d_b']
