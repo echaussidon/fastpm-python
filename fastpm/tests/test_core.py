@@ -6,14 +6,12 @@ import numpy
 from numpy.testing import assert_allclose
 
 from cosmoprimo.fiducial import DESI
+
+
 cosmo_fid = DESI('class')
 
-# on definit le spectre de puissance --> attention to_1D() raise une erreur mega relou...
-linear_power_spectrum_interp = cosmo_fid.get_fourier().pk_interpolator(extrap_kmin=1e-8, extrap_kmax=1e3)
-def linear_power_spectrum(k):
-    return linear_power_spectrum_interp(k, z=0.)
-
 pm = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8])
+
 
 def test_autostages():
     for knots in [
@@ -37,12 +35,12 @@ def test_leapfrog():
     assert len(l) == 1
 
 def test_solver():
-    Plin = linear_power_spectrum
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
     solver = Solver(pm, cosmo_fid, B=1)
     Q = pm.generate_uniform_particle_grid(shift=0)
 
     wn = solver.whitenoise(1234)
-    dlin = solver.linear(wn, lambda k: Plin(k))
+    dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
     state = solver.lpt(dlin, Q, a=1.0, order=2)
 
@@ -51,12 +49,12 @@ def test_solver():
     dnonlin.save('nonlin')
 
 def test_lpt():
-    Plin = linear_power_spectrum
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
     solver = Solver(pm, cosmo_fid, B=1)
     Q = pm.generate_uniform_particle_grid(shift=0)
 
     wn = solver.whitenoise(1234)
-    dlin = solver.linear(wn, lambda k: Plin(k))
+    dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
     state1 = solver.lpt(dlin, Q, a=0.01, order=1)
     state2 = solver.lpt(dlin, Q, a=1.0, order=1)
@@ -75,7 +73,7 @@ def test_solver_convergence(comm):
     pm = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8], comm=comm)
     pm_ref = ParticleMesh(BoxSize=128., Nmesh=[8, 8, 8], comm=MPI.COMM_SELF)
 
-    Plin = linear_power_spectrum
+    Plin = cosmo_fid.get_fourier().pk_interpolator().to_1d(z=0.)
 
     Q = pm_ref.generate_uniform_particle_grid(shift=0)
 
@@ -83,7 +81,7 @@ def test_solver_convergence(comm):
         solver = Solver(pm, cosmo_fid, B=1)
         q = numpy.array_split(Q, pm.comm.size)[pm.comm.rank]
         wn = solver.whitenoise(1234)
-        dlin = solver.linear(wn, lambda k: Plin(k))
+        dlin = solver.linear(wn, lambda k: numpy.where(k >0, Plin(k, bounds_error=False), 0))
 
         state = solver.lpt(dlin, q, a=0.1, order=2)
         state = solver.nbody(state, leapfrog([0.1, 0.5, 1.0]))

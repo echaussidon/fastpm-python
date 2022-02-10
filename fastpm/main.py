@@ -9,12 +9,6 @@ from .core import autostages
 from .background import PerturbationGrowth
 
 from cosmoprimo.fiducial import DESI
-
-# on definit le spectre de puissance --> attention to_1D() raise une erreur mega relou...
-linear_power_spectrum_interp = cosmo_fid.get_fourier().pk_interpolator(extrap_kmin=1e-8, extrap_kmax=1e3)
-def linear_power_spectrum(k):
-    return linear_power_spectrum_interp(k, z=0.)
-
 from pypower import MeshFFTPower
 import numpy
 
@@ -31,7 +25,7 @@ class Config(dict):
         self['pm_nc_factor'] = 2
         self['resampler'] = 'tsc'
         self['cosmology'] = DESI('class')
-        self['powerspectrum'] = linear_power_spectrum
+        self['powerspectrum'] = self['cosmology'].get_fourier().pk_interpolator().to_1d(z=0.)
         self['unitary'] = False
         self['stages'] = numpy.linspace(0.1, 1.0, 5, endpoint=True)
         self['aout'] = [1.0]
@@ -71,25 +65,13 @@ def main(args=None):
 
     def write_power(d, path, a):
         """
-        Compute the power spectrum at specific scale factor during the nbody computation.
+        Compute and save the powerspectrum for a given complex mesh d.
         """
-        boxsize = 1380 # cf config file or default value
-        kedges = np.linspace(0.0001, 0.2, 100)
-
-## FINIR ICII
-
-## ILLUSTER LE PROBLEME AVEC LINEAR AU DEBUT 88
-
-        poles = MeshFFTPower(d.c2r(), edges=kedges, ells=(0, 2, 4), boxcenter=boxsize//2, compensations='tsc', shotnoise=0.0, wnorm=None).poles
+        poles = MeshFFTPower(d.c2r(), edges=numpy.geomspace(1e-3, 5e-1, 80), ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
         if config.pm.comm.rank == 0:
             print('Writing matter power spectrum at %s' % path)
             # only root rank saves
-            numpy.savetxt(path,
-                numpy.array([
-                  r.power['k'], r.power['power'].real, r.power['modes'],
-                  r.power['power'].real / solver.cosmology.growth_factor(1.0 / a - 1) ** 2,
-                ]).T,
-                comments='# k p N p/D**2')
+            poles.save(path)
 
     def monitor(action, ai, ac, af, state, event):
         """
@@ -101,7 +83,7 @@ def main(args=None):
 
         if action == 'F':
             a = state.a['F']
-            path = config.makepath('power-%06.4f.txt' % a)
+            path = config.makepath('power-%06.4f.npy' % a)
             write_power(event['delta_k'], path, a)
 
         if state.synchronized:
@@ -113,23 +95,33 @@ def main(args=None):
                 # collective save
                 state.save(path, attrs=config)
 
-
+    # load configuration:
     ns = ap.parse_args(args)
     config = Config(ns.config)
 
+    # Create the mesh on which we will run the nbody simulation. Solver class contain all the function that we need.
     solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
-    whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
-    dlin = solver.linear(whitenoise, Pk=lambda k : config['powerspectrum'](k))
 
+    # generate random vector of norm 1 in complex plane in each point of the grid --> we generate delta_k
+    # remind: the fourier transform of real function is complex and even !
+    # remind: f real --> f(k) complex & even | f real et even --> f(k) real et even
+    whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
+    # whitenoise is a symetric matrix by construction (to have a real field after fourier transform) -> One of the dimension is two time smaller. -->  cf section 6 de Large-scale dark matter simulations
+
+    # Match delta_k with the desired power spectrum --> cf section6 of Large-scale dark matter simulations
+    dlin = solver.linear(whitenoise, Pk=lambda k : numpy.where(k >0, config['powerspectrum'](k, bounds_error=False), 0))
+
+    # generate particles in grid with uniform law:
     Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
 
+    # compute the displacement for each particle in the grid either with Zeldovich approximation (order=1) or 2LPT (order=2)
+    # then apply the displacement on each particle:
     state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
 
+    # Save input (Linear power spectrum at redshift=0.):
+    write_power(dlin, config.makepath('power-linear-1.0.npy'), a=1.0)
 
-
-    write_power(dlin, config.makepath('power-linear.txt'), a=1.0)
-
-
+    # Evolution of particles via fastpm computation:
     solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
 
 if __name__ == '__main__':
