@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 
 from pmesh.pm import ParticleMesh
 from .background import MatterDominated
@@ -15,12 +15,12 @@ class StateVector(object):
 
         self.H0 = 100. # in km/s / Mpc/h units
         # G * (mass of a particle)
-        self.GM0 = self.H0 ** 2 / ( 4 * numpy.pi ) * 1.5 * self.cosmology.Omega0_m * self.pm.BoxSize.prod() / self.csize
+        self.GM0 = self.H0 ** 2 / ( 4 * np.pi ) * 1.5 * self.cosmology.Omega0_m * self.pm.BoxSize.prod() / self.csize
 
-        self.S = numpy.zeros_like(self.Q)
-        self.P = numpy.zeros_like(self.Q)
-        self.F = numpy.zeros_like(self.Q)
-        self.RHO = numpy.zeros_like(self.Q[..., 0])
+        self.S = np.zeros_like(self.Q)
+        self.P = np.zeros_like(self.Q)
+        self.F = np.zeros_like(self.Q)
+        self.RHO = np.zeros_like(self.Q[..., 0])
         self.a = dict(S=None, P=None, F=None)
 
     def copy(self):
@@ -53,14 +53,6 @@ class StateVector(object):
         layout = self.pm.decompose(x)
         real.paint(x, layout=layout, hold=False)
         return real
-
-#    def to_catalog(self, **kwargs):
-#        from nbodykit.lab import ArrayCatalog
-#        source = ArrayCatalog({'Position' : self.X, 'Velocity' : self.V},
-#            BoxSize=self.pm.BoxSize, Om0=self.cosmology.Omega0_m,
-#            Time=self.a['S'], comm=self.pm.comm, **kwargs
-#        )
-#        return source
 
     def save(self, filename, attrs={}):
         from bigfile import FileMPI
@@ -115,6 +107,84 @@ class Solver(object):
     def linear(self, whitenoise, Pk):
         return whitenoise.apply(lambda k, v:
                         Pk(sum(ki ** 2 for ki in k)**0.5) ** 0.5 * v / v.BoxSize.prod() ** 0.5)
+
+    def add_local_non_gaussianity(self, dlin, fnl):
+        """
+            Add local non gaussianity to the matter power spectrum via the fnl parameter.
+
+            Parameters
+            ----------
+            dlin : TransposedComplexField
+                   Density field generated from the linear matter power spectrum without non gaussianity.
+            fnl : float
+                  Level of local non gaussianity.
+
+            Returns
+            -------
+            dlin : TransposedComplexField
+                   Density field generated from the linear matter power spectrum in which local non gaussianity are added. Used to generate initial particle.
+        """
+        def T_phi_delta(k, z, cosmo):
+            """
+                The initial power spectrum in CLASS is given by the primordial super-horizon power spectrum of curvature perturbations:
+
+                .. math::
+
+                k^3 P_zeta(k) / (2 pi^2) = A_s (k/k_pivot)^(n_s-1).
+
+                where A_s, n_s and k_pivot are given by the chosen cosmology from which the matter power spectrum P(k, z) are derived.
+
+                The power spectrum of the primordial potential :math:\Phi is then:
+
+                .. math::
+
+                P_Phi(k) = (9/25) P_zeta(k) = (9/25) (2 pi^2 / k^3) A_s (k/k_pivot)^(n_s-1).
+
+                Parameters
+                ---------
+                k : float, array_like
+                    the wavenumbers in units of :math:`h \mathrm{Mpc}^{-1}`
+                    remark: use sum(ki ** 2 for ki in k)**(0.5) with .apply function from pmesh
+                z : float
+                    redshift where the transfert function (ie) the matter power spectrum is evaluated
+                cosmo : cosmoprimo cosmology
+                    cosmology used to compute the matter power spectrum.
+
+                Returns
+                -------
+                Tk : float, array_like
+                    the transfer function evaluated at ``k``, ``z``. **Not normalized** to units as
+                    :math:`k \rightarrow 0` at :math:`z=0`.
+            """
+            k = np.asarray(k)
+            non_zero = k>0
+
+            T = np.ones(k.shape)
+
+            # power spectrum of primordial potential:
+            # cosmo.k_pivot is in Mpc^-1.h (for planck18 k_pivot is 0.05 Mpc^-1)
+            P_Phi_prim = 9/25 * 2 * np.pi**2 / k[non_zero]**3 * cosmo.A_s * (k[non_zero]/cosmo.k_pivot)**(cosmo.n_s - 1)
+
+            # power spectrum of the matter at z:
+            P_delta = cosmo.get_fourier().pk_interpolator(extrap_kmin=1e-9, extrap_kmax=1e2)(k[non_zero], z, bounds_error=True)
+
+            # compute the transfert function:
+            T[non_zero] = (P_delta/ P_Phi_prim)**0.5
+
+            return T
+
+        # Compute phi_prim from dlin with Transfert function:
+        dlin = dlin.apply(lambda k, v: v / T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
+
+        # Or generate phi_prim direct with Primordial power spectrum:
+        #dlin = solver.linear(whitenoise, Pk=lambda k : my_where(k, k>0, config['powerspectrum'], 0)/T_phi_delta(k, 0, config['cosmology'])**2)
+
+        # add fnl:
+        if fnl != 0:
+            phi_prim = dlin.c2r()
+            dlin = (phi_prim_real + fnl*(phi_prim_real**2 - (phi_prim_real**2).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
+
+        return dlin
 
     def lpt(self, linear, Q, a, order=2):
         """ This computes the 'force' from LPT as well. """
@@ -228,14 +298,14 @@ def autostages(knots, N, astart=None, N0=None):
 
     """
 
-    knots = numpy.array(knots)
+    knots = np.array(knots)
     knots.sort()
 
-    stages = numpy.array([], dtype='f8')
+    stages = np.array([], dtype='f8')
     if astart is not None and astart != knots.min():
         assert astart < knots.min()
         if N0 is None: N0 = 1
-        knots = numpy.append([astart], knots)
+        knots = np.append([astart], knots)
     else:
         N0 = 1
 
@@ -246,14 +316,14 @@ def autostages(knots, N, astart=None, N0=None):
         if i == 0 and N_this_span < N0:
             N_this_span = N0
 
-        add = numpy.linspace(knots[i], knots[i + 1], N_this_span, endpoint=False)
+        add = np.linspace(knots[i], knots[i + 1], N_this_span, endpoint=False)
 
         #print('i = =====', i)
         #print('knots[i]', knots[i], da, N_this_span, stages, add)
 
-        stages = numpy.append(stages, add)
+        stages = np.append(stages, add)
 
-    stages = numpy.append(stages, [knots[-1]])
+    stages = np.append(stages, [knots[-1]])
 
     return stages
 

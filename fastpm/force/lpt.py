@@ -1,5 +1,5 @@
 from . import kernels as FKN
-import numpy
+import numpy as np
 
 def lpt1(dlin_k, q, resampler='cic'):
     """ Run first order LPT on linear density field, returns displacements of particles
@@ -13,7 +13,7 @@ def lpt1(dlin_k, q, resampler='cic'):
     layout = basepm.decompose(q)
     local_q = layout.exchange(q)
 
-    source = numpy.zeros((len(q), ndim), dtype=q.dtype)
+    source = np.zeros((len(q), ndim), dtype=q.dtype)
     for d in range(len(basepm.Nmesh)):
         disp = dlin_k.apply(FKN.laplace) \
                     .apply(FKN.gradient(d, order=1), out=Ellipsis) \
@@ -62,6 +62,3 @@ def lpt2source(dlin_k):
 
     source[...] *= 3.0 / 7
     return source.r2c(out=Ellipsis)
-
-
-

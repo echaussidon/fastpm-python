@@ -8,30 +8,39 @@ from .core import leapfrog
 from .core import autostages
 from .background import PerturbationGrowth
 
+import numpy as np
+
 from cosmoprimo.fiducial import DESI
+from cosmoprimo import constants
+
 from pypower import MeshFFTPower
-import numpy
+
 
 class Config(dict):
     def __init__(self, path):
         self.prefix = '%s' % path
         filename = self.makepath('config.py')
 
-        self['boxsize'] = 1380.0
-        self['shift'] = 0.0
-        self['nc'] = 64
-        self['ndim'] = 3
-        self['seed'] = 1985
-        self['pm_nc_factor'] = 2
-        self['resampler'] = 'tsc'
-        self['cosmology'] = DESI('class')
-        self['powerspectrum'] = self['cosmology'].get_fourier().pk_interpolator().to_1d(z=0.)
-        self['unitary'] = False
-        self['stages'] = numpy.linspace(0.1, 1.0, 5, endpoint=True)
-        self['aout'] = [1.0]
+        self['boxsize'] = 1380.0     # size of the box for the simulation.
+        self['shift'] = 0.0          # shifting the grid by this much relative to the size of each grid cell.
+        self['nc'] = 64              # number of mesh points along one direction for
+        self['ndim'] = 3             # number of dimensions.
+        self['seed'] = 1985          # fix the random seed for reproductibility.
+        self['pm_nc_factor'] = 2     # force resolution parameter (B parameter). The size per side of the mesh(Nm) used for force calculation is B times the number of particles per side (Ng) (B=2 seems to be a good choice).
+        self['resampler'] = 'tsc'    # type of window (ie) how the particle will be painted in a Mesh ('tsc' is order 3)
+        self['cosmology'] = DESI('class')  # cosmology in which the simulation is done
+        self['powerspectrum'] = self['cosmology'].get_fourier().pk_interpolator().to_1d(z=0.) # power spectrum with which the initialisation is done
+        self['unitary'] = False      # True for a unitary gaussian field (amplitude is fixed to 1) False for a true gaussian field
+        self['stages'] = np.linspace(0.1, 1.0, 5, endpoint=True) # a_start -- a_end -- N = # time step --> use autostages instead of linspace
+        self['aout'] = [1.0]         # in which a the particles are saved
 
-        local = {} # these names will be usable in the config file
-        local['linspace'] = numpy.linspace
+        # add initial non-gaussianity:
+        self['use_non_gaussianity'] = False
+        self['fnl'] = 0.
+        self['gnl'] = 0.
+
+        local = {} # these names will be usable in the config file, can add cosmo to use specific cosmology.
+        local['linspace'] = np.linspace
         local['autostages'] = autostages
 
         names = set(self.__dict__.keys())
@@ -46,10 +55,10 @@ class Config(dict):
         _config = self
 
     def finalize(self):
-        self['aout'] = numpy.array(self['aout'])
+        self['aout'] = np.array(self['aout'])
 
         self.pm = ParticleMesh(BoxSize=self['boxsize'], Nmesh= [self['nc']] * self['ndim'], resampler=self['resampler'])
-        mask = numpy.array([ a not in self['stages'] for a in self['aout']], dtype='?')
+        mask = np.array([a not in self['stages'] for a in self['aout']], dtype='?')
         missing_stages = self['aout'][mask]
         if len(missing_stages):
             raise ValueError('Some stages are requested for output but missing: %s' % str(missing_stages))
@@ -67,11 +76,20 @@ def main(args=None):
         """
         Compute and save the powerspectrum for a given complex mesh d.
         """
-        poles = MeshFFTPower(d.c2r(), edges=numpy.geomspace(1e-3, 5e-1, 80), ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
+        poles = MeshFFTPower(d.c2r(), edges=np.geomspace(1e-3, 5e-1, 80), ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
         if config.pm.comm.rank == 0:
             print('Writing matter power spectrum at %s' % path)
             # only root rank saves
             poles.save(path)
+
+    def my_where(k, mask, fun, default=0):
+        """
+        Implementation of np.where to avoid to call the function in np.where and raise warning for division error for instance.
+        """
+        toret = np.empty_like(k)
+        toret[mask] = fun(k[mask])
+        toret[~mask] = default
+        return toret
 
     def monitor(action, ai, ac, af, state, event):
         """
@@ -109,16 +127,21 @@ def main(args=None):
     # whitenoise is a symetric matrix by construction (to have a real field after fourier transform) -> One of the dimension is two time smaller. -->  cf section 6 de Large-scale dark matter simulations
 
     # Match delta_k with the desired power spectrum --> cf section6 of Large-scale dark matter simulations
-    dlin = solver.linear(whitenoise, Pk=lambda k : numpy.where(k >0, config['powerspectrum'](k, bounds_error=False), 0))
+    # Here dlin is delta(k, z=0) following the linear power spectrum at z=0. (set correct redshift thanks to the growth_rate at displacement stage.)
+    dlin = solver.linear(whitenoise, Pk=lambda k : my_where(k, k>0, config['powerspectrum'], 0))
+
+    if config['use_non_gaussianity']:
+        dlin = solver.add_non_gaussianity(dlin, fnl=config['fnl'])
 
     # generate particles in grid with uniform law:
     Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
 
     # compute the displacement for each particle in the grid either with Zeldovich approximation (order=1) or 2LPT (order=2)
+    # Warning: We normalize here with the growth factor to have the power spectrum at the correct redhift !
     # then apply the displacement on each particle:
     state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
 
-    # Save input (Linear power spectrum at redshift=0.):
+    # Save input (matter power spectrum at redshift=0.):
     write_power(dlin, config.makepath('power-linear-1.0.npy'), a=1.0)
 
     # Evolution of particles via fastpm computation:
