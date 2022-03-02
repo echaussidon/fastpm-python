@@ -148,4 +148,11 @@ def main(args=None):
     solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
 
 if __name__ == '__main__':
+    # to remove this warning from pmesh:
+    # VisibleDeprecationWarning: Creating an ndarray from ragged nested sequences
+    # (which is a list-or-tuple of lists-or-tuples-or ndarrays with different lengths or shapes) is deprecated.
+    # If you meant to do this, you must specify 'dtype=object' when creating the ndarray.
+    import warnings
+    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+
     main()
