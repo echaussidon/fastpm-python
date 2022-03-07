@@ -108,7 +108,7 @@ class Solver(object):
         return whitenoise.apply(lambda k, v:
                         Pk(sum(ki ** 2 for ki in k)**0.5) ** 0.5 * v / v.BoxSize.prod() ** 0.5)
 
-    def add_local_non_gaussianity(self, dlin, fnl):
+    def add_local_non_gaussianity(self, dlin, fnl=0., kmax_primordial_over_knyquist=0.5):
         """
             Add local non gaussianity to the matter power spectrum via the fnl parameter.
 
@@ -124,6 +124,7 @@ class Solver(object):
             dlin : TransposedComplexField
                    Density field generated from the linear matter power spectrum in which local non gaussianity are added. Used to generate initial particle.
         """
+
         def T_phi_delta(k, z, cosmo):
             """
                 The initial power spectrum in CLASS is given by the primordial super-horizon power spectrum of curvature perturbations:
@@ -173,6 +174,16 @@ class Solver(object):
 
             return T
 
+        def low_pass_filter(k, kmax_primordial_over_knyquist, pm):
+            """Apply lower filter (ie) set at 0 everything with k >= kmax_primordial_over_knyquist*knyquist."""
+
+            knyquist = pm.Nmesh[0]/2 * (2*np.pi) / pm.BoxSize[0]
+
+            filter = np.ones(k.shape)
+            filter[k >= kmax_primordial_over_knyquist*knyquist] = 0
+
+            return filter
+
         # Compute phi_prim from dlin with Transfert function:
         dlin = dlin.apply(lambda k, v: v / T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
 
@@ -181,8 +192,11 @@ class Solver(object):
 
         # add fnl:
         if fnl != 0:
-            phi_prim = dlin.c2r()
-            dlin = (phi_prim_real + fnl*(phi_prim_real**2 - (phi_prim_real**2).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
+            # Use low filter to remove spurious Dirac foldings when computing Phi^2(x) on a grid
+            phi_prim_sq = dlin.apply(lambda k, v: v * low_pass_filter(sum(ki ** 2 for ki in k)**(0.5), kmax_primordial_over_knyquist, dlin.pm))**2
+
+            # Add local non gaussianity;
+            dlin = (dlin.c2r() + fnl*(phi_prim_sq - (phi_prim_sq).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
 
         return dlin
 
