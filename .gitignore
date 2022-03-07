@@ -15,3 +15,4 @@ doc/_build/
 **/.ipynb_checkpoints
 **/bak
 *.DS_Store
+examples/run/*
