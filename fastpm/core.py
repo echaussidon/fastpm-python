@@ -185,7 +185,7 @@ class Solver(object):
             return filter
 
         # Compute phi_prim from dlin with Transfert function:
-        dlin = dlin.apply(lambda k, v: v / T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
+        dlin = dlin.apply(lambda k, v: v / T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., self.cosmology))
 
         # Or generate phi_prim direct with Primordial power spectrum:
         #dlin = solver.linear(whitenoise, Pk=lambda k : my_where(k, k>0, config['powerspectrum'], 0)/T_phi_delta(k, 0, config['cosmology'])**2)
@@ -193,10 +193,10 @@ class Solver(object):
         # add fnl:
         if fnl != 0:
             # Use low filter to remove spurious Dirac foldings when computing Phi^2(x) on a grid
-            phi_prim_sq = dlin.apply(lambda k, v: v * low_pass_filter(sum(ki ** 2 for ki in k)**(0.5), kmax_primordial_over_knyquist, dlin.pm))**2
+            phi_prim_sq = (dlin.apply(lambda k, v: v * low_pass_filter(sum(ki ** 2 for ki in k)**(0.5), kmax_primordial_over_knyquist, dlin.pm)).c2r())**2
 
             # Add local non gaussianity;
-            dlin = (dlin.c2r() + fnl*(phi_prim_sq - (phi_prim_sq).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., config['cosmology']))
+            dlin = (dlin.c2r() + fnl*(phi_prim_sq - (phi_prim_sq).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., self.cosmology))
 
         return dlin
 

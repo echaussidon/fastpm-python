@@ -132,7 +132,7 @@ def main(args=None):
     dlin = solver.linear(whitenoise, Pk=lambda k : my_where(k, k>0, config['powerspectrum'], 0))
 
     if config['use_non_gaussianity']:
-        dlin = solver.add_non_gaussianity(dlin, fnl=config['fnl'], kmax_primordial_over_knyquist=config['kmax_primordial_over_knyquist'])
+        dlin = solver.add_local_non_gaussianity(dlin, fnl=config['fnl'], kmax_primordial_over_knyquist=config['kmax_primordial_over_knyquist'])
 
     # generate particles in grid with uniform law:
     Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
