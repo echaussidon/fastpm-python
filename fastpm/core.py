@@ -194,9 +194,16 @@ class Solver(object):
         if fnl != 0:
             # Use low filter to remove spurious Dirac foldings when computing Phi^2(x) on a grid
             phi_prim_sq = (dlin.apply(lambda k, v: v * low_pass_filter(sum(ki ** 2 for ki in k)**(0.5), kmax_primordial_over_knyquist, dlin.pm)).c2r())**2
+            phi_prim_sq_avg = phi_prim_sq.cmean()
 
             # Add local non gaussianity;
-            dlin = (dlin.c2r() + fnl*(phi_prim_sq - (phi_prim_sq).cmean())).r2c().apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., self.cosmology))
+            dlin = (dlin.c2r() + fnl*(phi_prim_sq - phi_prim_sq_avg)).r2c()
+
+            if dlin.pm.comm.rank == 0:
+                print(f"Add local non gaussianity with fnl = {fnl} and with <phi^2(x)> = {phi_prim_sq_avg}")
+
+        # transform phi_prim_NG to delta_NG at z=0
+        dlin = dlin.apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., self.cosmology))
 
         return dlin
 
