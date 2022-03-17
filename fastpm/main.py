@@ -80,7 +80,7 @@ def main(args=None):
         """
         Compute and save the powerspectrum for a given complex mesh d.
         """
-        poles = MeshFFTPower(d.c2r(), edges=config.power_kedges, ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
+        poles = MeshFFTPower(d.c2r(), edges=config['power_kedges'], ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
         if config.pm.comm.rank == 0:
             print('Writing matter power spectrum at %s' % path)
             # only root rank saves
