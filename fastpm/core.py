@@ -1,7 +1,12 @@
+import logging
+
 import numpy as np
 
 from pmesh.pm import ParticleMesh
 from .background import MatterDominated
+
+
+logger = logging.getLogger('Core')
 
 
 class StateVector(object):
@@ -102,9 +107,13 @@ class Solver(object):
         return FastPMStep(self)
 
     def whitenoise(self, seed, unitary=False):
+        if self.pm.comm.rank == 0:
+            logger.info(f'Generate Withenoise with seed = {seed} and unitary = {unitary}')
         return self.pm.generate_whitenoise(seed, type='complex', unitary=unitary)
 
     def linear(self, whitenoise, Pk):
+        if self.pm.comm.rank == 0:
+            logger.info(f'Match withenoise to the initial power spectrum')
         return whitenoise.apply(lambda k, v:
                         Pk(sum(ki ** 2 for ki in k)**0.5) ** 0.5 * v / v.BoxSize.prod() ** 0.5)
 
@@ -200,7 +209,7 @@ class Solver(object):
             dlin = (dlin.c2r() + fnl*(phi_prim_sq - phi_prim_sq_avg)).r2c()
 
             if dlin.pm.comm.rank == 0:
-                print(f"Add local non gaussianity with fnl = {fnl} and with <phi^2(x)> = {phi_prim_sq_avg}")
+                logger.info(f"Add local non gaussianity with fnl = {fnl} and with <phi^2(x)> = {phi_prim_sq_avg}")
 
         # transform phi_prim_NG to delta_NG at z=0
         dlin = dlin.apply(lambda k, v: v * T_phi_delta(sum(ki ** 2 for ki in k)**(0.5), 0., self.cosmology))

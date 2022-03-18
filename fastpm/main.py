@@ -1,19 +1,25 @@
 from argparse import ArgumentParser
+import logging
+
+import numpy as np
 from pmesh.pm import ParticleMesh
-ap = ArgumentParser()
-ap.add_argument("config")
 
 from .core import Solver
 from .core import leapfrog
 from .core import autostages
 from .background import PerturbationGrowth
 
-import numpy as np
-
 from cosmoprimo.fiducial import DESI
 from cosmoprimo import constants
 
 from pypower import MeshFFTPower
+
+
+ap = ArgumentParser()
+ap.add_argument("config")
+
+
+logger = logging.getLogger('Main')
 
 
 class Config(dict):
@@ -45,6 +51,7 @@ class Config(dict):
 
         local = {} # these names will be usable in the config file, can add cosmo to use specific cosmology.
         local['linspace'] = np.linspace
+        local['geomspace'] = np.geomspace
         local['autostages'] = autostages
 
         names = set(self.__dict__.keys())
@@ -75,6 +82,7 @@ def main(args=None):
     # Supress the logger from pypower
     import logging
     logging.getLogger("MeshFFTPower").setLevel(logging.ERROR)
+    logging.getLogger("PowerSpectrumMultipoles").setLevel(logging.ERROR)
 
     def write_power(d, path, a):
         """
@@ -82,7 +90,7 @@ def main(args=None):
         """
         poles = MeshFFTPower(d.c2r(), edges=config['power_kedges'], ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
         if config.pm.comm.rank == 0:
-            print('Writing matter power spectrum at %s' % path)
+            logger.info(f'Writing matter power spectrum at {path}')
             # only root rank saves
             poles.save(path)
 
@@ -100,8 +108,8 @@ def main(args=None):
         Monitor function. Action to do for different steps of the computation.
         """
         if config.pm.comm.rank == 0:
-            print('Step %s %06.4f - (%06.4f) -> %06.4f' %( action, ai, ac, af),
-                  'S %(S)06.4f P %(P)06.4f F %(F)06.4f' % (state.a))
+            s, p, f = state.a['S'], state.a['P'], state.a['F']
+            logger.info(f'Step {action} {ai:06.4f} - ({ac:06.4f}) -> {af:06.4f} S {s:06.4f} P {p:06.4f} F {f:06.4f}')
 
         if action == 'F':
             a = state.a['F']
@@ -113,7 +121,7 @@ def main(args=None):
             if a in config['aout']:
                 path = config.makepath('fpm-%06.4f' % a) % a
                 if config.pm.comm.rank == 0:
-                    print('Writing a snapshot at %s' % path)
+                    logger.info(f'Writing a snapshot at {path}')
                 # collective save
                 state.save(path, attrs=config)
 
@@ -152,6 +160,9 @@ def main(args=None):
     solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
 
 if __name__ == '__main__':
+    from .logger import setup_logging
+    setup_logging()
+
     # to remove this warning from pmesh:
     # VisibleDeprecationWarning: Creating an ndarray from ragged nested sequences
     # (which is a list-or-tuple of lists-or-tuples-or ndarrays with different lengths or shapes) is deprecated.
