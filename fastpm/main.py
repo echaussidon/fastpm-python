@@ -128,6 +128,9 @@ def main(args=None):
     # load configuration:
     ns = ap.parse_args(args)
     config = Config(ns.config)
+    if config.pm.comm.rank == 0:
+        from pprint import pformat
+        logger.info(f'Configuration:\n{pformat(config)}\n')
 
     # Create the mesh on which we will run the nbody simulation. Solver class contain all the function that we need.
     solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
