@@ -8,6 +8,7 @@ from .core import Solver
 from .core import leapfrog
 from .core import autostages
 from .background import PerturbationGrowth
+#from .process_monitor import MemoryMonitor
 
 from cosmoprimo.fiducial import DESI
 from cosmoprimo import constants
@@ -78,7 +79,7 @@ class Config(dict):
         import os.path
         return os.path.join(self.prefix, filename)
 
-def main(args=None):
+def main(comm, rank, args=None):
     # Supress the logger from pypower
     import logging
     logging.getLogger("MeshFFTPower").setLevel(logging.ERROR)
@@ -89,7 +90,7 @@ def main(args=None):
         Compute and save the powerspectrum for a given complex mesh d.
         """
         poles = MeshFFTPower(d.c2r(), edges=config['power_kedges'], ells=(0), wnorm=d.pm.Nmesh.prod()**2/d.pm.BoxSize.prod(), shotnoise=0.).poles
-        if config.pm.comm.rank == 0:
+        if rank == 0:
             logger.info(f'Writing matter power spectrum at {path}')
             # only root rank saves
             poles.save(path)
@@ -107,7 +108,8 @@ def main(args=None):
         """
         Monitor function. Action to do for different steps of the computation.
         """
-        if config.pm.comm.rank == 0:
+
+        if rank == 0:
             s, p, f = state.a['S'], state.a['P'], state.a['F']
             logger.info(f'Step {action} {ai:06.4f} - ({ac:06.4f}) -> {af:06.4f} S {s:06.4f} P {p:06.4f} F {f:06.4f}')
 
@@ -120,7 +122,7 @@ def main(args=None):
             a = state.a['S']
             if a in config['aout']:
                 path = config.makepath('fpm-%06.4f' % a) % a
-                if config.pm.comm.rank == 0:
+                if rank == 0:
                     logger.info(f'Writing a snapshot at {path}')
                 # collective save
                 state.save(path, attrs=config)
@@ -128,7 +130,7 @@ def main(args=None):
     # load configuration:
     ns = ap.parse_args(args)
     config = Config(ns.config)
-    if config.pm.comm.rank == 0:
+    if rank == 0:
         from pprint import pformat
         logger.info(f'Configuration:\n\n{pformat(config)}\n')
 
@@ -166,11 +168,12 @@ if __name__ == '__main__':
     from .logger import setup_logging
     setup_logging()
 
-    # to remove this warning from pmesh:
-    # VisibleDeprecationWarning: Creating an ndarray from ragged nested sequences
-    # (which is a list-or-tuple of lists-or-tuples-or ndarrays with different lengths or shapes) is deprecated.
-    # If you meant to do this, you must specify 'dtype=object' when creating the ndarray.
-    import warnings
-    warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    start_ini = MPI.Wtime()
 
-    main()
+    main(comm, rank)
+
+    if rank == 0:
+        logger.info(f"fastpm-python took {MPI.Wtime() - start_ini:2.2f} s.")

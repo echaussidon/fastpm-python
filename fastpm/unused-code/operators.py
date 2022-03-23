@@ -251,4 +251,3 @@ def gravity_gradient(x, pm, factor, grad_f, out_x=None):
     out_x[...] *= factor
 
     return out_x
-
