@@ -18,7 +18,6 @@ class MemoryMonitor(object):
         pid : int, default=None
             Process identifier. If ``None``, use the identifier of the current process.
         """
-        print(os.getpid())
         self.proc = psutil.Process(os.getpid() if pid is None else pid)
         self.mem = self.proc.memory_info().rss / 1e6
         self.time = time.time()
