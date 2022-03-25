@@ -190,9 +190,9 @@ if __name__ == '__main__':
         ff.create_from_array('1/Velocity', halos['CMVelocity'])
         ff.create_from_array('1/Mass', attrs['particle_mass'] * halos['Length'])
 
-    nbr_halos = 0 if (rank == 0) else None
-    comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
-    logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
+    #nbr_halos = 0 if (rank == 0) else None
+    #comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
+    #logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
     start = MPI.Wtime()
     position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
