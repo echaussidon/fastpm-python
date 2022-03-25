@@ -194,11 +194,11 @@ if __name__ == '__main__':
     #comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
     #logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
-    start = MPI.Wtime()
-    position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
-    CatalogFFTPower(data_positions1=position, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-                    boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0]//2, resampler='tsc', interlacing=2, los='x', position_type='pos',
-                    mpicomm=comm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
-    logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
+    # start = MPI.Wtime()
+    # position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
+    # CatalogFFTPower(data_positions1=position, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
+    #                 boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0]//2, resampler='tsc', interlacing=2, los='x', position_type='pos',
+    #                 mpicomm=comm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
+    # logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)
