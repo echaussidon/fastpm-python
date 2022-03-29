@@ -45,7 +45,7 @@ def load_bigfile(path, dataset='1/', comm=None):
     # FutureWarning: Passing (type, 1) or '1type' as a synonym of type is deprecated; in a future version of numpy, it will be understood as (type, (1,)) / '(1,)type'.
     import warnings
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore",category=FutureWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)
 
         logger_info(logger, f'Read {path}', comm.Get_rank())
         # read simulation output
@@ -61,12 +61,12 @@ def load_fiducial_cosmo():
     from cosmoprimo.fiducial import DESI
     # Load fiducial cosmology
     cosmo = DESI(engine='class')
-    #precompute the bakcground
-    bg = cosmo.get_background()
+    # precompute the bakcground
+    _ = cosmo.get_background()
     return cosmo
 
 
-def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e12):
+def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e12, rank=None):
     """
     Determine the halos of Dark Matter with the FOF algorithm of nbody kit. The computation is parallelized with MPI if the file is open with a commutator.
 
@@ -92,10 +92,14 @@ def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e1
     # Run the fof algorithm
     fof = FOF(particles, linking_length, nmin)
 
+    print(f"111 avec le rank:{rank}", flush=True)
+
     # build halos catalog:
     halos = fof_catalog(fof._source, fof.labels, fof.comm, peakcolumn=None, periodic=fof.attrs['periodic'])
     # remove halos with lenght == 0
     halos = halos[halos['Length'] > 0]
+
+    print(f"222 avec le rank:{rank}", flush=True)
 
     # meta-data
     attrs = particles.attrs.copy()
@@ -120,11 +124,11 @@ def collect_argparser():
                         help="nmesh used for the power spectrum computation")
 
     parser.add_argument("--k_min", type=float, required=False, default=5e-3,
-                         help="to build np.geomspace(k_min, k_max, k_nbins)")
+                        help="to build np.geomspace(k_min, k_max, k_nbins)")
     parser.add_argument("--k_max", type=float, required=False, default=3e0,
-                         help="to build np.geomspace(k_min, k_max, k_nbins)")
+                        help="to build np.geomspace(k_min, k_max, k_nbins)")
     parser.add_argument("--k_nbins", type=float, required=False, default=80,
-                         help="to build np.geomspace(k_min, k_max, k_nbins)")
+                        help="to build np.geomspace(k_min, k_max, k_nbins)")
 
     parser.add_argument("--min_mass_halos", type=float, required=False, default=1e13,
                         help="minimal mass of the halos to be kept")
@@ -132,6 +136,7 @@ def collect_argparser():
                         help="minimal number of particle to form a halos")
 
     return parser.parse_args()
+
 
 if __name__ == '__main__':
 
@@ -161,17 +166,17 @@ if __name__ == '__main__':
     # need to use wrap = True since some particles are outside the box
     # no neeed to select rank == 0 it is automatic in .save method
     CatalogFFTPower(data_positions1=particles['Position'].compute(), wrap=True, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-                    boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0]//2, resampler='tsc', interlacing=2, los='x', position_type='pos',
+                    boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x', position_type='pos',
                     mpicomm=comm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
     logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
     start = MPI.Wtime()
     cosmo = load_fiducial_cosmo()
-    particle_mass = (cosmo.get_background().rho_cdm(1/float(aout) - 1) + cosmo.get_background().rho_b(1/float(aout) - 1)) /cosmo.h *1e10 * particles.attrs['boxsize'][0]**3 / particles.csize # units: Solar Mass
-    halos, attrs = build_halos_catalog(particles, nmin=args.nmin)
+    particle_mass = (cosmo.get_background().rho_cdm(1 / float(aout) - 1) + cosmo.get_background().rho_b(1 / float(aout) - 1)) / cosmo.h * 1e10 * particles.attrs['boxsize'][0]**3 / particles.csize  # units: Solar Mass
+    halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank)
     attrs['particle_mass'] = particle_mass
-    attrs['min_mass_halos'] =  args.min_mass_halos
+    attrs['min_mass_halos'] = args.min_mass_halos
     logger_info(logger, f"Find halos (with nmin = {args.nmin}) done in {MPI.Wtime() - start:.2f} s.", rank)
 
     start = MPI.Wtime()
@@ -183,16 +188,16 @@ if __name__ == '__main__':
             for key in keylist:
                 try:
                     bb.attrs[key] = attrs[key]
-                except:
+                except KeyError:
                     pass
         # work with center of mass
         ff.create_from_array('1/Position', halos['CMPosition'])
         ff.create_from_array('1/Velocity', halos['CMVelocity'])
         ff.create_from_array('1/Mass', attrs['particle_mass'] * halos['Length'])
 
-    #nbr_halos = 0 if (rank == 0) else None
-    #comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
-    #logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
+    # nbr_halos = 0 if (rank == 0) else None
+    # comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
+    # logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
     # start = MPI.Wtime()
     # position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
