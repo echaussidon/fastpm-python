@@ -54,6 +54,10 @@ class MemoryMonitor(object):
         self.mem = mem
         self.time = t
 
+    def stop_monitoring(self):
+        if self.log_file is not None:
+            self.log_file.close()
+
     def __exit__(self, exc_type, exc_value, exc_traceback):
         """Exit context."""
         self()
@@ -64,6 +68,7 @@ def plot_memory(path, prefix=''):
     list_files = glob.glob(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_*.txt"))
 
     tab = np.loadtxt(list_files[0])[:, :2].T
+    print('aa')
     t, mem = tab[0], tab[1]
     for file in list_files[1:]:
         tab = np.loadtxt(file)[:, :2].T
