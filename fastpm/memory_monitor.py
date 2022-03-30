@@ -79,5 +79,5 @@ def plot_memory(path, prefix=''):
     plt.ylabel('Global Memory [Gb]')
     plt.title(f'Max Memory per proc = {np.max(mem_per_proc) / 1e3:2.1f} [Gb] (for nproc={len(list_files)}) ')
     plt.tight_layout()
-    plt.savefig(os.path.join(path, "memory-monitor.png"))
+    plt.savefig(os.path.join(path, f"{prefix}memory-monitor.png"))
     plt.close()

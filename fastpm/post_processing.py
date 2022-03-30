@@ -6,6 +6,8 @@ import numpy as np
 
 from pypower import CatalogFFTPower, setup_logging
 
+from .memory_monitor import MemoryMonitor, plot_memory
+
 
 logger = logging.getLogger('Post processing')
 
@@ -66,7 +68,7 @@ def load_fiducial_cosmo():
     return cosmo
 
 
-def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e12, rank=None):
+def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e12, rank=None, memory_monitor=None):
     """
     Determine the halos of Dark Matter with the FOF algorithm of nbody kit. The computation is parallelized with MPI if the file is open with a commutator.
 
@@ -91,15 +93,17 @@ def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e1
 
     # Run the fof algorithm
     fof = FOF(particles, linking_length, nmin)
-
-    print(f"111 avec le rank:{rank}", flush=True)
+    if memory_monitor is not None:
+        memory_monitor()
 
     # build halos catalog:
     halos = fof_catalog(fof._source, fof.labels, fof.comm, peakcolumn=None, periodic=fof.attrs['periodic'])
     # remove halos with lenght == 0
+    if memory_monitor is not None:
+        memory_monitor()
     halos = halos[halos['Length'] > 0]
-
-    print(f"222 avec le rank:{rank}", flush=True)
+    if memory_monitor is not None:
+        memory_monitor()
 
     # meta-data
     attrs = particles.attrs.copy()
@@ -154,12 +158,15 @@ if __name__ == '__main__':
     start_ini = MPI.Wtime()
 
     args = collect_argparser()
-
     sim = os.path.join(args.path_to_sim, args.sim)
     aout = args.aout
 
+    mem_monitor = MemoryMonitor(log_file=os.path.join(sim, 'memory-monitor', f'halos-{aout}-memory_monitor_rank_{rank}.txt'))
+    mem_monitor()
+
     start = MPI.Wtime()
     particles = load_bigfile(os.path.join(sim, f'fpm-{aout}'), comm=comm)
+    mem_monitor()
     logger_info(logger, f"Number of DM particles: {particles.csize} read in {MPI.Wtime() - start:2.2f} s.", rank)
 
     start = MPI.Wtime()
@@ -168,15 +175,18 @@ if __name__ == '__main__':
     CatalogFFTPower(data_positions1=particles['Position'].compute(), wrap=True, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
                     boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x', position_type='pos',
                     mpicomm=comm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
+    mem_monitor()
     logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
     start = MPI.Wtime()
     cosmo = load_fiducial_cosmo()
     particle_mass = (cosmo.get_background().rho_cdm(1 / float(aout) - 1) + cosmo.get_background().rho_b(1 / float(aout) - 1)) / cosmo.h * 1e10 * particles.attrs['boxsize'][0]**3 / particles.csize  # units: Solar Mass
-    halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank)
+    mem_monitor()
+    halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank, memory_monitor=mem_monitor)
     attrs['particle_mass'] = particle_mass
     attrs['min_mass_halos'] = args.min_mass_halos
+    mem_monitor()
     logger_info(logger, f"Find halos (with nmin = {args.nmin}) done in {MPI.Wtime() - start:.2f} s.", rank)
 
     start = MPI.Wtime()
@@ -194,16 +204,22 @@ if __name__ == '__main__':
         ff.create_from_array('1/Position', halos['CMPosition'])
         ff.create_from_array('1/Velocity', halos['CMVelocity'])
         ff.create_from_array('1/Mass', attrs['particle_mass'] * halos['Length'])
+    mem_monitor()
 
-    # nbr_halos = 0 if (rank == 0) else None
-    # comm.Reduce([halos['Length'].size, MPI.DOUBLE], [nbr_halos, MPI.DOUBLE], op=MPI.SUM, root=0)
-    # logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
+    nbr_halos = comm.reduce(halos['Length'].size, op=MPI.SUM, root=0)
+    mem_monitor()
+    logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
-    # start = MPI.Wtime()
-    # position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
-    # CatalogFFTPower(data_positions1=position, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-    #                 boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0]//2, resampler='tsc', interlacing=2, los='x', position_type='pos',
-    #                 mpicomm=comm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
-    # logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
+    start = MPI.Wtime()
+    position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
+    mem_monitor()
+    CatalogFFTPower(data_positions1=position, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
+                    boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x', position_type='pos',
+                    mpicomm=comm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
+    mem_monitor()
+    logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)
+
+    if rank == 0:
+        plot_memory(sim, prefix=f'halos-{aout}-')

@@ -1,3 +1,4 @@
+import os
 from argparse import ArgumentParser
 import logging
 
@@ -8,7 +9,7 @@ from .core import Solver
 from .core import leapfrog
 from .core import autostages
 
-from .process_monitor import MemoryMonitor
+from .memory_monitor import MemoryMonitor
 
 from cosmoprimo.fiducial import DESI
 
@@ -75,19 +76,23 @@ class Config(dict):
             raise ValueError('Some stages are requested for output but missing: %s' % str(missing_stages))
 
     def makepath(self, filename):
-        import os.path
         return os.path.join(self.prefix, filename)
 
 
-def main(comm, rank, args=None):
+def main(comm, rank, path='.', args=None):
     # Supress the logger from pypower
     import logging
     logging.getLogger("MeshFFTPower").setLevel(logging.ERROR)
     logging.getLogger("PowerSpectrumMultipoles").setLevel(logging.ERROR)
 
-    mem = MemoryMonitor()
-
-    mem()
+    # initialize a memory monitor for each rank
+    if rank == 0:
+        try:
+            os.makedirs(os.path.join(path, 'memory-monitor'))
+        except OSError:
+            pass
+    comm.Barrier()  # Wait that the folder is created before creating memory monitor files
+    mem_monitor = MemoryMonitor(log_file=os.path.join(path, 'memory-monitor', f'fastpm-memory_monitor_rank_{rank}.txt'))
 
     def write_power(d, path, a):
         """
@@ -108,10 +113,12 @@ def main(comm, rank, args=None):
         toret[~mask] = default
         return toret
 
-    def monitor(action, ai, ac, af, state, event):
+    def monitor(action, ai, ac, af, state, event, mem_monitor=mem_monitor):
         """
         Monitor function. Action to do for different steps of the computation.
         """
+
+        mem_monitor()
 
         if rank == 0:
             s, p, f = state.a['S'], state.a['P'], state.a['F']
@@ -121,6 +128,7 @@ def main(comm, rank, args=None):
             a = state.a['F']
             path = config.makepath('power-%06.4f.npy' % a)
             write_power(event['delta_k'], path, a)
+            mem_monitor()
 
         if state.synchronized:
             a = state.a['S']
@@ -132,42 +140,48 @@ def main(comm, rank, args=None):
                 state.save(path, attrs=config)
 
     # load configuration:
-    ns = ap.parse_args(args)
-    config = Config(ns.config)
+    config = Config(path)
     if rank == 0:
         from pprint import pformat
         logger.info(f'Configuration:\n\n{pformat(config)}\n')
-    #
-    # # Create the mesh on which we will run the nbody simulation. Solver class contain all the function that we need.
-    # solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
-    #
-    # # generate random vector of norm 1 in complex plane in each point of the grid --> we generate delta_k
-    # # remind: the fourier transform of real function is complex and even !
-    # # remind: f real --> f(k) complex & even | f real et even --> f(k) real et even
-    # whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
-    # # whitenoise is a symetric matrix by construction (to have a real field after fourier transform) -> One of the dimension is two time smaller. -->  cf section 6 de Large-scale dark matter simulations
-    #
-    # # Match delta_k with the desired power spectrum --> cf section6 of Large-scale dark matter simulations
-    # # Here dlin is delta(k, z=0) following the linear power spectrum at z=0. (set correct redshift thanks to the growth_rate at displacement stage.)
-    # dlin = solver.linear(whitenoise, Pk=lambda k: my_where(k, k > 0, config['powerspectrum'], 0))
-    #
-    # if config['use_non_gaussianity']:
-    #     dlin = solver.add_local_non_gaussianity(dlin, fnl=config['fnl'], kmax_primordial_over_knyquist=config['kmax_primordial_over_knyquist'])
-    #
-    # # generate particles in grid with uniform law:
-    # Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
-    #
-    # # compute the displacement for each particle in the grid either with Zeldovich approximation (order=1) or 2LPT (order=2)
-    # # Warning: We normalize here with the growth factor to have the power spectrum at the correct redhift !
-    # # then apply the displacement on each particle:
-    # state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
-    #
-    # # Save input (matter power spectrum at redshift=0.):
-    # write_power(dlin, config.makepath('power-linear-1.0.npy'), a=1.0)
-    #
-    # # Evolution of particles via fastpm computation:
-    # solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
-    #
+
+    # Create the mesh on which we will run the nbody simulation. Solver class contain all the function that we need.
+    solver = Solver(config.pm, cosmology=config['cosmology'], B=config['pm_nc_factor'])
+    mem_monitor()
+
+    # generate random vector of norm 1 in complex plane in each point of the grid --> we generate delta_k
+    # remind: the fourier transform of real function is complex and even !
+    # remind: f real --> f(k) complex & even | f real et even --> f(k) real et even
+    whitenoise = solver.whitenoise(seed=config['seed'], unitary=config['unitary'])
+    mem_monitor()
+    # whitenoise is a symetric matrix by construction (to have a real field after fourier transform) -> One of the dimension is two time smaller. -->  cf section 6 de Large-scale dark matter simulations
+
+    # Match delta_k with the desired power spectrum --> cf section6 of Large-scale dark matter simulations
+    # Here dlin is delta(k, z=0) following the linear power spectrum at z=0. (set correct redshift thanks to the growth_rate at displacement stage.)
+    dlin = solver.linear(whitenoise, Pk=lambda k: my_where(k, k > 0, config['powerspectrum'], 0))
+    mem_monitor()
+
+    if config['use_non_gaussianity']:
+        dlin = solver.add_local_non_gaussianity(dlin, fnl=config['fnl'], kmax_primordial_over_knyquist=config['kmax_primordial_over_knyquist'])
+        mem_monitor()
+
+    # generate particles in grid with uniform law:
+    Q = config.pm.generate_uniform_particle_grid(shift=config['shift'])
+    mem_monitor()
+
+    # compute the displacement for each particle in the grid either with Zeldovich approximation (order=1) or 2LPT (order=2)
+    # Warning: We normalize here with the growth factor to have the power spectrum at the correct redhift !
+    # then apply the displacement on each particle:
+    state = solver.lpt(dlin, Q=Q, a=config['stages'][0], order=2)
+    mem_monitor()
+
+    # Save input (matter power spectrum at redshift=0.):
+    write_power(dlin, config.makepath('power-linear-1.0.npy'), a=1.0)
+    mem_monitor()
+
+    # Evolution of particles via fastpm computation:
+    solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
+
 
 if __name__ == '__main__':
     # to remove the following warning from pmesh (arnaud l'a corrigé sur son github mais ok)
@@ -184,9 +198,14 @@ if __name__ == '__main__':
     rank = comm.Get_rank()
     start_ini = MPI.Wtime()
 
-    print(comm, rank)
+    # collect argpars
+    ns = ap.parse_args()
 
-    main(comm, rank)
+    # launch main program
+    main(comm, rank, ns.config)
 
     if rank == 0:
         logger.info(f"fastpm-python took {MPI.Wtime() - start_ini:2.2f} s.")
+
+        from .memory_monitor import plot_memory
+        plot_memory(ns.config, prefix='fastpm-')
