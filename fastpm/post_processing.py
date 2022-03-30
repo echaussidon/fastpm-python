@@ -221,5 +221,8 @@ if __name__ == '__main__':
 
     logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)
 
+    mem_monitor.stop_monitoring()
+    comm.Barrier()
+
     if rank == 0:
         plot_memory(sim, prefix=f'halos-{aout}-')
