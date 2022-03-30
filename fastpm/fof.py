@@ -105,13 +105,9 @@ class FOF(object):
         # run the FOF
         minid = fof(self._source, self._linking_length, self.comm, self.attrs['periodic'], self.attrs['domain_factor'], self.logger)
 
-        print("ICI", flush=True)
-
         # the sorted labels
         self.labels = _assign_labels(minid, comm=self.comm, thresh=self.attrs['nmin'])
         self.max_label = self.comm.allgather(self.labels.max())
-
-        print(f"LA", flush=True)
 
     def find_features(self, peakcolumn=None):
         """
@@ -133,7 +129,6 @@ class FOF(object):
 
         attrs
         """
-        print("laaaaa")
         # the center-of-mass (Position, Velocity, Length)
         halos = fof_catalog(self._source, self.labels, self.comm, peakcolumn=peakcolumn, periodic=self.attrs['periodic'])
         attrs = self._source.attrs.copy()
