@@ -4,9 +4,10 @@ import argparse
 
 import numpy as np
 
-from pypower import CatalogFFTPower, setup_logging
-
+from .fof import FOF
 from .memory_monitor import MemoryMonitor, plot_memory
+
+from pypower import CatalogFFTPower, setup_logging
 
 
 logger = logging.getLogger('Post processing')
@@ -87,17 +88,16 @@ def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e1
     ------
     halos :  numpy dtype array
 
+    attrs : attributs which will be saved in the BigFile.
     """
-    from nbodykit.algorithms.fof import FOF
-    from nbodykit.algorithms.fof import fof_catalog
-
     # Run the fof algorithm
     fof = FOF(particles, linking_length, nmin)
     if memory_monitor is not None:
         memory_monitor()
 
     # build halos catalog:
-    halos = fof_catalog(fof._source, fof.labels, fof.comm, peakcolumn=None, periodic=fof.attrs['periodic'])
+    halos, attrs = fof.find_features()
+
     # remove halos with lenght == 0
     if memory_monitor is not None:
         memory_monitor()
