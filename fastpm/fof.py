@@ -49,10 +49,11 @@ class FOF(object):
     """
     logger = logging.getLogger('FOF')
 
-    def __init__(self, source, linking_length, nmin, absolute=False, periodic=True, domain_factor=1):
+    def __init__(self, source, linking_length, nmin, absolute=False, periodic=True, domain_factor=1, memory_monitor=None):
 
         self.comm = source.comm
         self._source = source
+        self.memory_monitor = memory_monitor
 
         if 'Position' not in source:
             raise ValueError("cannot compute FOF without 'Position' column")
@@ -103,7 +104,7 @@ class FOF(object):
             number of FOF halos found
         """
         # run the FOF
-        minid = fof(self._source, self._linking_length, self.comm, self.attrs['periodic'], self.attrs['domain_factor'], self.logger)
+        minid = fof(self._source, self._linking_length, self.comm, self.attrs['periodic'], self.attrs['domain_factor'], self.logger, memory_monitor=self.memory_monitor)
 
         # the sorted labels
         self.labels = _assign_labels(minid, comm=self.comm, thresh=self.attrs['nmin'])
@@ -130,7 +131,7 @@ class FOF(object):
         attrs
         """
         # the center-of-mass (Position, Velocity, Length)
-        halos = fof_catalog(self._source, self.labels, self.comm, peakcolumn=peakcolumn, periodic=self.attrs['periodic'])
+        halos = fof_catalog(self._source, self.labels, self.comm, peakcolumn=peakcolumn, periodic=self.attrs['periodic'], memory_monitor=self.memory_monitor)
         attrs = self._source.attrs.copy()
         attrs.update(self.attrs)
         return halos, attrs
@@ -279,7 +280,7 @@ def _fof_merge(layout, minid, comm):
     return minid
 
 
-def fof(source, linking_length, comm, periodic, domain_factor, logger):
+def fof(source, linking_length, comm, periodic, domain_factor, logger, memory_monitor=None):
     """
     Run Friends-of-friends halo finder.
 
@@ -309,6 +310,9 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger):
     """
     from pmesh.domain import GridND
 
+    if memory_monitor is not None:
+        memory_monitor()
+
     np = split_size_3d(comm.size)
     nd = np * domain_factor
 
@@ -333,10 +337,16 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger):
     ]
     domain = GridND(grid, comm=comm, periodic=periodic)
 
+    if memory_monitor is not None:
+        memory_monitor()
+
     Position = source.compute(source['Position'])
     np = comm.allgather(len(Position))
     if comm.rank == 0:
         logger.info("Number of particles max/min = %d / %d before spatial decomposition" % (max(np), min(np)))
+
+    if memory_monitor is not None:
+        memory_monitor()
 
     # balance the load
     domain.loadbalance(domain.load(Position))
@@ -347,16 +357,25 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger):
     if comm.rank == 0:
         logger.info("Number of particles max/min = %d / %d after spatial decomposition" % (max(np), min(np)))
 
+    if memory_monitor is not None:
+        memory_monitor()
+
     comm.barrier()
     minid = _fof_local(layout, Position, BoxSize, linking_length, comm)
+
+    if memory_monitor is not None:
+        memory_monitor()
 
     comm.barrier()
     minid = _fof_merge(layout, minid, comm)
 
+    if memory_monitor is not None:
+        memory_monitor()
+
     return minid
 
 
-def fof_catalog(source, label, comm, position='Position', velocity='Velocity', initposition='InitialPosition', peakcolumn=None, periodic=True):
+def fof_catalog(source, label, comm, position='Position', velocity='Velocity', initposition='InitialPosition', peakcolumn=None, periodic=True, memory_monitor=None):
     """
     Catalog of FOF groups based on label from a parent source
 
@@ -400,6 +419,9 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     """
     from .utils import ScatterArray
 
+    if memory_monitor is not None:
+        memory_monitor()
+
     # make sure all of the columns are there
     for col in [position, velocity]:
         if col not in source:
@@ -407,6 +429,12 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
 
     dtype = [('CMPosition', ('f4', 3)), ('CMVelocity', ('f4', 3)), ('Length', 'i4')]
     N = count(label, comm=comm)
+
+    if memory_monitor is not None:
+        memory_monitor()
+
+    # if comm.Get_rank() == 0:
+    #     print(N, flush=True)
 
     if periodic:
         # make sure BoxSize is there
@@ -419,13 +447,26 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     # center of mass position
     hpos = centerofmass(label, source.compute(source[position]), boxsize=boxsize, comm=comm)
 
+    if memory_monitor is not None:
+        memory_monitor()
+
+    # if comm.Get_rank() in [0, 10, 20]:
+    #     print(label, flush=True)
+    #     print(f"particles: {label.size} ({(label>0).sum()})vs halos: {hpos.size} -- rank == {comm.Get_rank()}", flush=True)
+
     # center of mass velocity
     hvel = centerofmass(label, source.compute(source[velocity]), boxsize=None, comm=comm)
+
+    if memory_monitor is not None:
+        memory_monitor()
 
     # center of mass initial position
     if initposition in source:
         dtype.append(('InitialPosition', ('f4', 3)))
         hpos_init = centerofmass(label, source.compute(source[initposition]), boxsize=boxsize, comm=comm)
+
+    if memory_monitor is not None:
+        memory_monitor()
 
     if peakcolumn is not None:
         assert peakcolumn in source
@@ -443,6 +484,9 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
         ppos = centerofmass(label1, source.compute(source[position]), boxsize=boxsize, comm=comm)
         pvel = centerofmass(label1, source.compute(source[velocity]), boxsize=None, comm=comm)
 
+        if memory_monitor is not None:
+            memory_monitor()
+
     dtype = numpy.dtype(dtype)
     if comm.rank == 0:
         catalog = numpy.empty(shape=len(N), dtype=dtype)
@@ -459,6 +503,9 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
             catalog['PeakVelocity'] = pvel
     else:
         catalog = None
+
+    if memory_monitor is not None:
+        memory_monitor()
 
     return ScatterArray(catalog, comm, root=0)
 
@@ -587,6 +634,8 @@ def centerofmass(label, pos, boxsize, comm=MPI.COMM_WORLD):
     This is a collective operation, and after the call, all ranks
     will have the position of halos.
 
+    --> VERY BAD IDEA ...
+
     Parameters
     ----------
     label : array_like (integers)
@@ -608,6 +657,9 @@ def centerofmass(label, pos, boxsize, comm=MPI.COMM_WORLD):
 
     N = numpy.bincount(label, minlength=Nhalo0)
     comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
+
+    # if comm.Get_rank() == 0:
+    #     print(N, flush=True)
 
     if boxsize is not None:
         posmin = equiv_class(label, pos, op=numpy.fmin, dense_labels=True, identity=numpy.inf,
@@ -656,6 +708,6 @@ def count(label, comm=MPI.COMM_WORLD):
     Nhalo0 = max(comm.allgather(label.max())) + 1
 
     N = numpy.bincount(label, minlength=Nhalo0)
-    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
+    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM, root=0)
 
     return N

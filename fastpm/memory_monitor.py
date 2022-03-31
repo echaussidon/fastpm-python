@@ -68,7 +68,6 @@ def plot_memory(path, prefix=''):
     list_files = glob.glob(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_*.txt"))
 
     tab = np.loadtxt(list_files[0])[:, :2].T
-    print('aa')
     t, mem = tab[0], tab[1]
     for file in list_files[1:]:
         tab = np.loadtxt(file)[:, :2].T
@@ -78,11 +77,25 @@ def plot_memory(path, prefix=''):
     t = t / len(list_files)
     mem_per_proc = mem / len(list_files)
 
-    plt.figure()
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121)
     plt.plot(t, mem / 1e3)
     plt.xlabel('t [s]')
     plt.ylabel('Global Memory [Gb]')
     plt.title(f'Max Memory per proc = {np.max(mem_per_proc) / 1e3:2.1f} [Gb] (for nproc={len(list_files)}) ')
+
+    plt.subplot(122)
+    tab = np.loadtxt(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_0.txt"))[:, :2].T
+    t, mem = tab[0], tab[1]
+    plt.plot(t, mem / 1e3, label='rank==0')
+
+    tab = np.loadtxt(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_1.txt"))[:, :2].T
+    t, mem = tab[0], tab[1]
+    plt.plot(t, mem / 1e3, label='rank==1')
+    plt.xlabel('t [s]')
+    plt.ylabel('Memory [Gb]')
+    plt.legend()
+
     plt.tight_layout()
     plt.savefig(os.path.join(path, f"{prefix}memory-monitor.png"))
     plt.close()

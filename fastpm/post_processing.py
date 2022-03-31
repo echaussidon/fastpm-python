@@ -91,7 +91,7 @@ def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e1
     attrs : attributs which will be saved in the BigFile.
     """
     # Run the fof algorithm
-    fof = FOF(particles, linking_length, nmin)
+    fof = FOF(particles, linking_length, nmin, memory_monitor=memory_monitor)
     if memory_monitor is not None:
         memory_monitor()
 
