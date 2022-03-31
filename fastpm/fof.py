@@ -708,6 +708,6 @@ def count(label, comm=MPI.COMM_WORLD):
     Nhalo0 = max(comm.allgather(label.max())) + 1
 
     N = numpy.bincount(label, minlength=Nhalo0)
-    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM, root=0)
+    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
 
     return N
