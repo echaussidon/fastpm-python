@@ -35,4 +35,4 @@ What we need to do:
     * use shifter in a sbatch script:
         * add `#SBATCH --image=edmondchau/fastpm-python:latest`
         * add shifter front of the command
-        * cf *launch_test.sh* 
+        * cf *launch_test.sh*
