@@ -172,11 +172,11 @@ if __name__ == '__main__':
     start = MPI.Wtime()
     # need to use wrap = True since some particles are outside the box
     # no neeed to select rank == 0 it is automatic in .save method
-    CatalogFFTPower(data_positions1=particles['Position'].compute(), wrap=True, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-                    boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x', position_type='pos',
-                    mpicomm=comm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
-    mem_monitor()
-    logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
+   CatalogFFTPower(data_positions1=particles['Position'].compute(), wrap=True, edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
+                   boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x', position_type='pos',
+                   mpicomm=comm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
+   mem_monitor()
+   logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
     start = MPI.Wtime()

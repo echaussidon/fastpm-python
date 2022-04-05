@@ -5,7 +5,7 @@ Credit: This code is copy from https://github.com/bccp/nbodykit/blob/master/nbod
 
 from __future__ import print_function
 
-import numpy
+import numpy as np
 import logging
 from mpi4py import MPI
 
@@ -76,7 +76,7 @@ class FOF(object):
                 ndim = source['Position'].shape[1]
             else:
                 raise AttributeError('Missing attributes to infer the dimension')
-            mean_separation = pow(numpy.prod(source.attrs['BoxSize']) / source.csize, 1.0 / ndim)
+            mean_separation = pow(np.prod(source.attrs['BoxSize']) / source.csize, 1.0 / ndim)
             linking_length *= mean_separation
         self._linking_length = linking_length
 
@@ -165,13 +165,13 @@ def _assign_labels(minid, comm, thresh):
     """
     from mpi4py import MPI
 
-    dtype = numpy.dtype([('origind', 'u8'), ('fofid', 'u8'), ])
-    data = numpy.empty(len(minid), dtype=dtype)
+    dtype = np.dtype([('origind', 'u8'), ('fofid', 'u8'), ])
+    data = np.empty(len(minid), dtype=dtype)
     # assign origind for recovery of ordering, since
     # we need to work in sorted fofid
     data['fofid'] = minid
-    data['origind'] = numpy.arange(len(data), dtype='u4')
-    data['origind'] += numpy.sum(comm.allgather(len(data))[:comm.rank], dtype='intp') \
+    data['origind'] = np.arange(len(data), dtype='u4')
+    data['origind'] += np.sum(comm.allgather(len(data))[:comm.rank], dtype='intp') \
 
     data = DistributedArray(data, comm)
 
@@ -186,7 +186,7 @@ def _assign_labels(minid, comm, thresh):
 
     Nlocal = label.bincount(local=True)
     # mask == True for particles in small halos
-    mask = numpy.repeat(small, Nlocal)
+    mask = np.repeat(small, Nlocal)
 
     # globally shift halo id by one
     label.local += 1
@@ -213,7 +213,7 @@ def _assign_labels(minid, comm, thresh):
     del data
 
     Nhalo0 = max(comm.allgather(label.max())) + 1
-    Nlocal = numpy.bincount(label, minlength=Nhalo0)
+    Nlocal = np.bincount(label, minlength=Nhalo0)
     comm.Allreduce(MPI.IN_PLACE, Nlocal, op=MPI.SUM)
 
     # sort the labels by halo size
@@ -222,8 +222,8 @@ def _assign_labels(minid, comm, thresh):
         dtype = 'i8'
     else:
         dtype = 'i4'
-    P = numpy.arange(Nhalo0, dtype=dtype)
-    P[arg] = numpy.arange(len(arg), dtype=dtype) + 1
+    P = np.arange(Nhalo0, dtype=dtype)
+    P[arg] = np.arange(len(arg), dtype=dtype) + 1
     label = P[label]
     return label
 
@@ -241,12 +241,13 @@ def _fof_local(layout, pos, boxsize, ll, comm):
     labels = fof.labels
     del fof
 
-    PID = numpy.arange(N, dtype='intp')
-    PID += numpy.sum(comm.allgather(N)[:comm.rank], dtype='intp')
+    PID = np.arange(N, dtype='intp')
+    PID += np.sum(comm.allgather(N)[:comm.rank], dtype='intp')
 
     PID = layout.exchange(PID)
     # initialize global labels
-    minid = equiv_class(labels, PID, op=numpy.fmin)[labels]
+    minid, _, _ = equiv_class(labels, PID, op=np.fmin)
+    minid = minid[labels]
 
     return minid
 
@@ -257,7 +258,7 @@ def _fof_merge(layout, minid, comm):
     while True:
         # merge, if a particle belongs to several ranks
         # use the global label of the minimal
-        minid_new = layout.gather(minid, mode=numpy.fmin)
+        minid_new = layout.gather(minid, mode=np.fmin)
         minid_new = layout.exchange(minid_new)
 
         # on my rank, these particles have been merged
@@ -276,7 +277,7 @@ def _fof_merge(layout, minid, comm):
         old = old[arg]
         replacesorted(minid, old, new, out=minid)
 
-    minid = layout.gather(minid, mode=numpy.fmin)
+    minid = layout.gather(minid, mode=np.fmin)
     return minid
 
 
@@ -310,67 +311,61 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger, memory_mo
     """
     from pmesh.domain import GridND
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
-    np = split_size_3d(comm.size)
-    nd = np * domain_factor
+    n_p = split_size_3d(comm.size)
+    nd = n_p * domain_factor
 
     if periodic:
         BoxSize = source.attrs.get('BoxSize', None)
         if BoxSize is None:
             raise ValueError("cannot compute FOF clustering of source without 'BoxSize' in ``attrs`` dict")
-        if numpy.isscalar(BoxSize):
+        if np.isscalar(BoxSize):
             BoxSize = [BoxSize, BoxSize, BoxSize]
 
         left = [0, 0, 0]
         right = BoxSize
     else:
         BoxSize = None
-        left = numpy.min(comm.allgather(source['Position'].min(axis=0).compute()), axis=0)
-        right = numpy.max(comm.allgather(source['Position'].max(axis=0).compute()), axis=0)
+        left = np.min(comm.allgather(source['Position'].min(axis=0).compute()), axis=0)
+        right = np.max(comm.allgather(source['Position'].max(axis=0).compute()), axis=0)
 
     grid = [
-        numpy.linspace(left[0], right[0], nd[0] + 1, endpoint=True),
-        numpy.linspace(left[1], right[1], nd[1] + 1, endpoint=True),
-        numpy.linspace(left[2], right[2], nd[2] + 1, endpoint=True),
+        np.linspace(left[0], right[0], nd[0] + 1, endpoint=True),
+        np.linspace(left[1], right[1], nd[1] + 1, endpoint=True),
+        np.linspace(left[2], right[2], nd[2] + 1, endpoint=True),
     ]
     domain = GridND(grid, comm=comm, periodic=periodic)
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     Position = source.compute(source['Position'])
-    np = comm.allgather(len(Position))
+    n_p = comm.allgather(len(Position))
     if comm.rank == 0:
-        logger.info("Number of particles max/min = %d / %d before spatial decomposition" % (max(np), min(np)))
+        logger.info("Number of particles max/min = %d / %d before spatial decomposition" % (max(n_p), min(n_p)))
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     # balance the load
     domain.loadbalance(domain.load(Position))
 
     layout = domain.decompose(Position, smoothing=linking_length * 1)
 
-    np = comm.allgather(layout.recvlength)
+    n_p = comm.allgather(layout.recvlength)
     if comm.rank == 0:
-        logger.info("Number of particles max/min = %d / %d after spatial decomposition" % (max(np), min(np)))
+        logger.info("Number of particles max/min = %d / %d after spatial decomposition" % (max(n_p), min(n_p)))
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     comm.barrier()
     minid = _fof_local(layout, Position, BoxSize, linking_length, comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     comm.barrier()
     minid = _fof_merge(layout, minid, comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     return minid
 
@@ -419,8 +414,7 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     """
     from .utils import ScatterArray
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     # make sure all of the columns are there
     for col in [position, velocity]:
@@ -428,13 +422,9 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
             raise ValueError(f"the column '{col}' is missing from parent source; cannot compute halos")
 
     dtype = [('CMPosition', ('f4', 3)), ('CMVelocity', ('f4', 3)), ('Length', 'i4')]
-    N = count(label, comm=comm)
+    N, nbr_halos = count(label, comm=comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
-
-    # if comm.Get_rank() == 0:
-    #     print(N, flush=True)
+    if memory_monitor is not None: memory_monitor()
 
     if periodic:
         # make sure BoxSize is there
@@ -447,26 +437,19 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     # center of mass position
     hpos = centerofmass(label, source.compute(source[position]), boxsize=boxsize, comm=comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
-
-    # if comm.Get_rank() in [0, 10, 20]:
-    #     print(label, flush=True)
-    #     print(f"particles: {label.size} ({(label>0).sum()})vs halos: {hpos.size} -- rank == {comm.Get_rank()}", flush=True)
+    if memory_monitor is not None: memory_monitor()
 
     # center of mass velocity
     hvel = centerofmass(label, source.compute(source[velocity]), boxsize=None, comm=comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     # center of mass initial position
     if initposition in source:
         dtype.append(('InitialPosition', ('f4', 3)))
         hpos_init = centerofmass(label, source.compute(source[initposition]), boxsize=boxsize, comm=comm)
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     if peakcolumn is not None:
         assert peakcolumn in source
@@ -475,26 +458,26 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
         dtype.append(('PeakVelocity', ('f4', 3)))
 
         density = source[peakcolumn].compute()
-        dmax = equiv_class(label, density, op=numpy.fmax, dense_labels=True, minlength=len(N), identity=-numpy.inf)
-        comm.Allreduce(MPI.IN_PLACE, dmax, op=MPI.MAX)
+        dmax, unique_label, label_inverse = equiv_class(label, density, op=np.fmax)
+        _, dmax_minimal = reduce_sparse(nbr_halos, unique_label, dmax, np.fmax, -np.inf, comm, send_result=True)
+
         # remove any non-peak particle from the labels
-        label1 = label * (density >= dmax[label])
+        label1 = label * (density >= dmax_minimal[label_inverse])
 
         # compute the center of mass on the new labels
         ppos = centerofmass(label1, source.compute(source[position]), boxsize=boxsize, comm=comm)
         pvel = centerofmass(label1, source.compute(source[velocity]), boxsize=None, comm=comm)
 
-        if memory_monitor is not None:
-            memory_monitor()
+        if memory_monitor is not None: memory_monitor()
 
-    dtype = numpy.dtype(dtype)
-    if comm.rank == 0:
-        catalog = numpy.empty(shape=len(N), dtype=dtype)
+    dtype = np.dtype(dtype)
+    if comm.Get_rank() == 0:
+        catalog = np.empty(shape=nbr_halos, dtype=dtype)
 
         catalog['CMPosition'] = hpos
         catalog['CMVelocity'] = hvel
         catalog['Length'] = N
-        catalog['Length'][0] = 0
+        catalog['Length'][0] = 0  # label == 0 --> particles without halos
         if 'InitialPosition' in dtype.names:
             catalog['InitialPosition'] = hpos_init
 
@@ -504,8 +487,7 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     else:
         catalog = None
 
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     return ScatterArray(catalog, comm, root=0)
 
@@ -513,9 +495,11 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
 # -----------------------
 # Helpers
 # -----------------------
-def equiv_class(labels, values, op, dense_labels=False, identity=None, minlength=None):
+def equiv_class(labels, values, op, dense_labels=False, identity=None):
     """
     apply operation to equivalent classes by label, on values
+
+    **MODIFICATION** remove dense argument, work with sparse idea
 
     Parameters
     ----------
@@ -523,12 +507,12 @@ def equiv_class(labels, values, op, dense_labels=False, identity=None, minlength
         the label of objects, starting from 0.
     values : array_like
         the values of objects (len(labels), ...)
-    op : :py:class:`numpy.ufunc`
+    op : :py:class:`np.ufunc`
         the operation to apply
-    dense_labels : boolean
-        If the labels are already dense (from 0 to Nobjects - 1)
-        If False, :py:meth:`numpy.unique` is used to convert
-        the labels internally
+    # dense_labels : boolean
+    #     If the labels are already dense (from 0 to Nobjects - 1)
+    #     If False, :py:meth:`np.unique` is used to convert
+    #     the labels internally
 
     Returns
     -------
@@ -537,14 +521,14 @@ def equiv_class(labels, values, op, dense_labels=False, identity=None, minlength
 
     Examples
     --------
-    >>> x = numpy.arange(10)
-    >>> print equiv_class(x, x, numpy.fmin, dense_labels=True)
+    >>> x = np.arange(10)
+    >>> print equiv_class(x, x, np.fmin) #, dense_labels=True)
     [0 1 2 3 4 5 6 7 8 9]
 
-    >>> x = numpy.arange(10)
-    >>> v = numpy.arange(20).reshape(10, 2)
+    >>> x = np.arange(10)
+    >>> v = np.arange(20).reshape(10, 2)
     >>> x[1] = 0
-    >>> print equiv_class(x, 1.0 * v, numpy.fmin, dense_labels=True, identity=numpy.inf)
+    >>> print equiv_class(x, 1.0 * v, np.fmin, identity=np.inf) #, dense_labels=True)
     [[  0.   1.]
      [ inf  inf]
      [  4.   5.]
@@ -557,33 +541,19 @@ def equiv_class(labels, values, op, dense_labels=False, identity=None, minlength
      [ 18.  19.]]
 
     """
-    # dense labels
-    if not dense_labels:
-        junk, labels = numpy.unique(labels, return_inverse=True)
-        del junk
-    N = numpy.bincount(labels)
-    offsets = numpy.concatenate([[0], N.cumsum()], axis=0)[:-1]
+    unique_labels, labels, N = np.unique(labels, return_inverse=True, return_counts=True)
+
+    offsets = np.concatenate([[0], N.cumsum()], axis=0)[:-1]
     arg = labels.argsort()
     if identity is None:
         identity = op.identity
-    if minlength is None:
-        minlength = len(N)
 
-    # work around numpy dtype reference counting bugs
-    # be a simple man and never steal anything.
-
-    dtype = numpy.dtype((values.dtype, values.shape[1:]))
-
-    result = numpy.empty(minlength, dtype=dtype)
-    result[:len(N)] = op.reduceat(values[arg], offsets)
+    result = op.reduceat(values[arg], offsets)
 
     if (N == 0).any():
-        result[:len(N)][N == 0] = identity
+        result[N == 0] = identity
 
-    if len(N) < minlength:
-        result[len(N):] = identity
-
-    return result
+    return result, unique_labels, labels
 
 
 def replacesorted(arr, sorted, b, out=None):
@@ -608,7 +578,7 @@ def replacesorted(arr, sorted, b, out=None):
 
     Examples
     --------
-    >>> print replacesorted(numpy.arange(10), numpy.arange(5), numpy.ones(5))
+    >>> print replacesorted(np.arange(10), np.arange(5), np.ones(5))
     [1 1 1 1 1 5 6 7 8 9]
 
     """
@@ -618,7 +588,7 @@ def replacesorted(arr, sorted, b, out=None):
         return out
     ind = sorted.searchsorted(arr)
     ind.clip(0, len(sorted) - 1, out=ind)
-    arr = numpy.array(arr)
+    arr = np.array(arr)
     found = sorted[ind] == arr
     out[found] = b[ind[found]]
     return out
@@ -635,6 +605,8 @@ def centerofmass(label, pos, boxsize, comm=MPI.COMM_WORLD):
     will have the position of halos.
 
     --> VERY BAD IDEA ...
+
+    --> Now the result is only in rank = 0 and we never create an array of halos size in all the process
 
     Parameters
     ----------
@@ -653,35 +625,32 @@ def centerofmass(label, pos, boxsize, comm=MPI.COMM_WORLD):
         the center of mass position of the halos.
 
     """
-    Nhalo0 = max(comm.allgather(label.max())) + 1
-
-    N = numpy.bincount(label, minlength=Nhalo0)
-    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
-
-    # if comm.Get_rank() == 0:
-    #     print(N, flush=True)
+    N, nbr_halos = count(label, comm=comm)
 
     if boxsize is not None:
-        posmin = equiv_class(label, pos, op=numpy.fmin, dense_labels=True, identity=numpy.inf,
-                             minlength=len(N))
-        comm.Allreduce(MPI.IN_PLACE, posmin, op=MPI.MIN)
-        dpos = pos - posmin[label]
+        posmin, unique_label, label_inverse = equiv_class(label, pos, op=np.fmin)
+        posmin, posmin_minimal = reduce_sparse(nbr_halos, unique_label, posmin, np.fmin, np.inf, comm, send_result=True)
+        dpos = pos - posmin_minimal[label_inverse]
+
         for i in range(dpos.shape[-1]):
             bhalf = boxsize[i] * 0.5
             dpos[..., i][dpos[..., i] < -bhalf] += boxsize[i]
             dpos[..., i][dpos[..., i] >= bhalf] -= boxsize[i]
     else:
         dpos = pos
-    dpos = equiv_class(label, dpos, op=numpy.add, dense_labels=True, minlength=len(N))
+    dpos, unique_label, _ = equiv_class(label, dpos, op=np.add)
+    dpos = reduce_sparse(nbr_halos, unique_label, dpos, np.add, 0, comm, send_result=False)
 
-    comm.Allreduce(MPI.IN_PLACE, dpos, op=MPI.SUM)
-    dpos /= N[:, None]
+    if comm.Get_rank() == 0:
+        dpos /= N[:, None]
 
-    if boxsize is not None:
-        hpos = posmin + dpos
-        hpos %= boxsize
+        if boxsize is not None:
+            hpos = posmin + dpos
+            hpos %= boxsize
+        else:
+            hpos = dpos
     else:
-        hpos = dpos
+        hpos = None
     return hpos
 
 
@@ -702,12 +671,98 @@ def count(label, comm=MPI.COMM_WORLD):
     Returns
     -------
     count : array_like
-        the count of number of particles in each halo
+        the count of number of particles in each halo only for rank 0 to save memory
+    Nhalos0 : int
+        Number of halos
 
     """
     Nhalo0 = max(comm.allgather(label.max())) + 1
 
-    N = numpy.bincount(label, minlength=Nhalo0)
-    comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
+    # count the number of particle inside the same halos
+    unique_label, counts = np.unique(label, return_counts=True)
 
-    return N
+    N = reduce_sparse(Nhalo0, unique_label, counts, np.add, 0, comm, send_result=False)
+
+    return N, Nhalo0
+
+
+def reduce_sparse(label_max, unique_label, values, operation, init_value, comm, send_result=False):
+    """
+    Analog to comm.Allreduce with operation but create array only for root rank and done it with sparse matrix.
+    """
+
+    # Send information to the root rank
+    nbr_unique_label = comm.gather(unique_label.size, root=0)
+
+    if comm.Get_rank() != 0:  # .Send is a blocking communication
+        comm.Send(unique_label, dest=0, tag=1)
+        if values.ndim == 1:
+            comm.Send(values, dest=0, tag=2)
+        else:
+            for i in range(values.shape[1]):
+                to_send = values[:, i].copy()
+                comm.Send(to_send, dest=0, tag=2 + i)
+
+    if comm.Get_rank() == 0:
+        # Define used quantity to collect the output from all the ranks
+        shape = label_max if values.ndim == 1 else (label_max, values.shape[1])
+        res = init_value * np.ones(shape)
+
+        # add rank 0
+        res[unique_label] = operation(res[unique_label], values)
+
+        # collect other rank
+        for send_rank in range(1, comm.size):
+            unique_label_recv = np.zeros(nbr_unique_label[send_rank], dtype=type(unique_label[0]))
+            comm.Recv(unique_label_recv, source=send_rank, tag=1)
+            if values.ndim == 1:
+                values_recv = np.zeros(nbr_unique_label[send_rank], dtype=type(values[0]))
+                comm.Recv(values_recv, source=send_rank, tag=2)
+                res[unique_label_recv] = operation(res[unique_label_recv], values_recv)
+            else:
+                for i in range(values.shape[1]):
+                    values_recv = np.zeros(nbr_unique_label[send_rank], dtype=type(values[0, 0]))
+                    comm.Recv(values_recv, source=send_rank, tag=2 + i)
+                    res[unique_label_recv, i] = operation(res[unique_label_recv, i], values_recv)
+    else:
+        res = None
+
+    if send_result:
+        # Will populate the result on all the rank with only the corresponding value of label
+        comm.Barrier()  # wait the reduction of all the rank
+
+        if comm.Get_rank() != 0:  # send unique_label to avoid to store it in memory, good choice ?
+            # Ask the root rank
+            comm.Send(unique_label, dest=0, tag=10)
+            # collect the minimal answer to save memory space
+            if values.ndim == 1:
+                minimal_res = np.zeros(unique_label.size, dtype=type(values[0]))
+                comm.Recv(minimal_res, source=0, tag=11)
+            else:
+                minimal_res = np.zeros((unique_label.size, values.shape[1]), dtype=type(values[0, 0]))
+                for i in range(values.shape[1]):
+                    recv_tmp = np.zeros(unique_label.size, dtype=type(values[0, 0]))
+                    comm.Recv(recv_tmp, source=0, tag=11 + i)
+                    minimal_res[:, i] = recv_tmp
+
+        if comm.Get_rank() == 0:
+            # For root (rank 0):
+            minimal_res = res[unique_label]
+
+            # collect other rank
+            for send_rank in range(1, comm.size):
+                # Collect the label from send_rank
+                unique_label_recv = np.zeros(nbr_unique_label[send_rank], dtype=type(unique_label[0]))
+                comm.Recv(unique_label_recv, source=send_rank, tag=10)
+                # Send the corresponding part of res to the label to send_rank
+                if res.ndim == 1:
+                    comm.Send(res[unique_label_recv], dest=send_rank, tag=11)
+                else:
+                    for i in range(res.shape[1]):
+                        to_send = res[unique_label_recv, i].copy()
+                        comm.Send(to_send, dest=send_rank, tag=11 + i)
+
+        return res, minimal_res
+
+    else:
+        return res
