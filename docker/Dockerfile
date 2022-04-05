@@ -42,7 +42,9 @@ RUN python -m pip install git+https://github.com/cosmodesi/pycorr#egg=pycorr[mpi
 RUN python -m pip install git+https://github.com/cosmodesi/pypower
 RUN python -m pip install git+https://github.com/cosmodesi/cosmoprimo#egg=cosmoprimo[class]
 RUN python -m pip install pfft-python pmesh bigfile nbodykit
-RUN python -m pip install git+https://github.com/echaussidon/fastpm-python
+RUN python -m pip install psutil
 
-#useless
-#RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes slurm-client
+
+# to reinstall fastpm-python increase the value of ARG
+ARG nn=4
+RUN python -m pip install git+https://github.com/echaussidon/fastpm-python

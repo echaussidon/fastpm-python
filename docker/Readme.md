@@ -14,6 +14,8 @@ What we need to do:
     * download it at NERSC
     * Use shifter command to use the container
 
+**Remark:** to install lunix package with geographic location, you need to disable the question with (for slurm-client here): `RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes slurm-client`
+
 ## 2. How to build a docker image ?
 
     * To build the image (warning installing MPICH is quite long) run `docker build -t edmondchau/fastpm-python .`
