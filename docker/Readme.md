@@ -16,7 +16,7 @@ What we need to do:
 
 ## 2. How to build a docker image ?
 
-    * To build the image (warning installing MPICH is quite long) run `docker build edmondchau/fastpm-python .`
+    * To build the image (warning installing MPICH is quite long) run `docker build -t edmondchau/fastpm-python .`
     * To upload the image in docker hub run `docker push edmondchau/fastpm-python` (the repo edmondchau/fastpm-python is already created before pushing)
 
 ## 3. How to use the image in your computer ?
@@ -35,4 +35,4 @@ What we need to do:
     * use shifter in a sbatch script:
         * add `#SBATCH --image=edmondchau/fastpm-python:latest`
         * add shifter front of the command
-        * cf *launch_test.sh* 
+        * cf *launch_test.sh*
