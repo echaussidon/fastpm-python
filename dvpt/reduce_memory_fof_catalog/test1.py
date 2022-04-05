@@ -15,8 +15,11 @@ mem = MemoryMonitor(log_file=f'memory-monitor/test1-memory_monitor_rank_{rank}.t
 mem()
 
 # generate int label as halos id
-N_max = 1000000
-n_part = 20000
+N_max = 100000000
+n_part = 200000
+
+if rank == 0:
+    print(N_max, n_part)
 np.random.seed(2021 + rank * 100)
 label = np.random.randint(1, N_max + 1, n_part)  # exclude right
 mem()
@@ -28,8 +31,8 @@ mem()
 N = np.bincount(label, minlength=N_max)
 mem()
 # print(f"rank={rank}: N size={N.size}")
-for i in range(N.size):
-    _ = N[i]
+# for i in range(N.size):
+#     _ = N[i]
 time.sleep(0.5)
 mem()
 
@@ -51,7 +54,6 @@ if rank == 0:
     print(N.shape)
     print(np.argwhere(N > 0))
     print(N[N > 0])
-    np.save('test1.npy', N)
     print("\n \n")
 
 # do the same thing to compare the execution time
@@ -62,4 +64,5 @@ N = np.bincount(label, minlength=N_max)
 comm.Allreduce(MPI.IN_PLACE, N, op=MPI.SUM)
 toc = MPI.Wtime()
 if rank == 0:
-    print(f"Done in {toc - tic} s.")
+    np.save('test1.npy', N)
+    print(f"Done in {toc - tic} s.\n")
