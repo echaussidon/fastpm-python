@@ -6,8 +6,17 @@ Credit: This code is copy from https://github.com/bccp/nbodykit/blob/master/nbod
 import numpy
 from mpi4py import MPI
 import warnings
+import os
 
 import mpsort
+
+
+def mkdir(dirname):
+    """Try to create ``dirnm`` and catch :class:`OSError`."""
+    try:
+        os.makedirs(dirname)  # MPI...
+    except OSError:
+        return
 
 
 def is_structured_array(arr):
