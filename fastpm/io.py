@@ -84,6 +84,9 @@ class BaseFile(object):
     def __getitem__(self, item):  # to call the attributs of the class as a dictionnary
         return self.__dict__[item]
 
+    def __contains__(self, item):  # to do item in class
+        return item in self.__dict__.keys()
+
     def is_mpi_root(self):
         """Whether current rank is root."""
         return self.mpicomm.rank == self.mpiroot

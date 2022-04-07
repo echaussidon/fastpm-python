@@ -30,13 +30,11 @@ class FOF(object):
     Results are computed when the object is inititalized. See the documenation
     of :func:`~FOF.run` for the attributes storing the results.
 
-    For returning a CatalogSource of the FOF halos, see :func:`find_features`
-    and for computing a halo catalog with added analytic information for
-    a specific redshift and cosmology, see :func:`to_halos`.
+    For returning a ScatterArray of the FOF halos, see :func:`find_features`
 
     Parameters
     ----------
-    source : CatalogSource
+    source : :class:BigFile
         the source to run the FOF algorithm on; must support 'Position'
     linking_length : float
         the linking length, either in absolute units, or relative
@@ -51,7 +49,7 @@ class FOF(object):
 
     def __init__(self, source, linking_length, nmin, absolute=False, periodic=True, domain_factor=1, memory_monitor=None):
 
-        self.comm = source.comm
+        self.comm = source.mpicomm
         self._source = source
         self.memory_monitor = memory_monitor
 
@@ -70,12 +68,7 @@ class FOF(object):
 
         # linking length relative to mean separation
         if not absolute:
-            if 'Nmesh' in source.attrs:
-                ndim = len(source.attrs['Nmesh'])
-            elif 'Position' in source:
-                ndim = source['Position'].shape[1]
-            else:
-                raise AttributeError('Missing attributes to infer the dimension')
+            ndim = source['Position'].shape[1]
             mean_separation = pow(np.prod(source.attrs['BoxSize']) / source.csize, 1.0 / ndim)
             linking_length *= mean_separation
         self._linking_length = linking_length
@@ -150,7 +143,7 @@ def _assign_labels(minid, comm, thresh):
     minid : array_like, ('i8')
         The minimum particle id of the halo. All particles of a halo
         have the same minid
-    comm : py:class:`MPI.Comm`
+    comm : py:class:`MPI.comm`
         communicator. since this is a collective operation
     thresh : int
         halo with less than thresh particles are merged into halo 0
@@ -301,7 +294,7 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger, memory_mo
         ``source.attrs['BoxSize']`` is also used
     linking_length: float
         linking length in data units. (Usually Mpc/h).
-    comm: MPI.Comm
+    comm: MPI.comm
         The mpi communicator.
 
     Returns
@@ -327,8 +320,8 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger, memory_mo
         right = BoxSize
     else:
         BoxSize = None
-        left = np.min(comm.allgather(source['Position'].min(axis=0).compute()), axis=0)
-        right = np.max(comm.allgather(source['Position'].max(axis=0).compute()), axis=0)
+        left = np.min(comm.allgather(source['Position'].min(axis=0)), axis=0)
+        right = np.max(comm.allgather(source['Position'].max(axis=0)), axis=0)
 
     grid = [
         np.linspace(left[0], right[0], nd[0] + 1, endpoint=True),
@@ -339,7 +332,7 @@ def fof(source, linking_length, comm, periodic, domain_factor, logger, memory_mo
 
     if memory_monitor is not None: memory_monitor()
 
-    Position = source.compute(source['Position'])
+    Position = source['Position']
     n_p = comm.allgather(len(Position))
     if comm.rank == 0:
         logger.info("Number of particles max/min = %d / %d before spatial decomposition" % (max(n_p), min(n_p)))
@@ -390,7 +383,7 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
     label : array_like
         the label for each particle that identifies which halo it
         belongs to
-    comm: MPI.Comm
+    comm: MPI.comm
         the mpi communicator. Must agree with the datasource
     position : str, optional
         the column name specifying the position
@@ -435,19 +428,19 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
         boxsize = None
 
     # center of mass position
-    hpos = centerofmass(label, source.compute(source[position]), boxsize=boxsize, comm=comm)
+    hpos = centerofmass(label, source[position], boxsize=boxsize, comm=comm)
 
     if memory_monitor is not None: memory_monitor()
 
     # center of mass velocity
-    hvel = centerofmass(label, source.compute(source[velocity]), boxsize=None, comm=comm)
+    hvel = centerofmass(label, source[velocity], boxsize=None, comm=comm)
 
     if memory_monitor is not None: memory_monitor()
 
     # center of mass initial position
     if initposition in source:
         dtype.append(('InitialPosition', ('f4', 3)))
-        hpos_init = centerofmass(label, source.compute(source[initposition]), boxsize=boxsize, comm=comm)
+        hpos_init = centerofmass(label, source[initposition], boxsize=boxsize, comm=comm)
 
     if memory_monitor is not None: memory_monitor()
 
@@ -457,7 +450,7 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
         dtype.append(('PeakPosition', ('f4', 3)))
         dtype.append(('PeakVelocity', ('f4', 3)))
 
-        density = source[peakcolumn].compute()
+        density = source[peakcolumn]
         dmax, unique_label, label_inverse = equiv_class(label, density, op=np.fmax)
         _, dmax_minimal = reduce_sparse(nbr_halos, unique_label, dmax, np.fmax, -np.inf, comm, send_result=True)
 
@@ -465,8 +458,8 @@ def fof_catalog(source, label, comm, position='Position', velocity='Velocity', i
         label1 = label * (density >= dmax_minimal[label_inverse])
 
         # compute the center of mass on the new labels
-        ppos = centerofmass(label1, source.compute(source[position]), boxsize=boxsize, comm=comm)
-        pvel = centerofmass(label1, source.compute(source[velocity]), boxsize=None, comm=comm)
+        ppos = centerofmass(label1, source[position], boxsize=boxsize, comm=comm)
+        pvel = centerofmass(label1, source[velocity], boxsize=None, comm=comm)
 
         if memory_monitor is not None: memory_monitor()
 
@@ -616,7 +609,7 @@ def centerofmass(label, pos, boxsize, comm=MPI.COMM_WORLD):
         position of particles.
     boxsize : float or None
         size of the periodic box, or None if no periodic boundary is assumed.
-    comm : :py:class:`MPI.Comm`
+    comm : :py:class:`MPI.comm`
         communicator for the collective operation.
 
     Returns
@@ -665,7 +658,7 @@ def count(label, comm=MPI.COMM_WORLD):
     ----------
     label : array_like (integers)
         Halo label of particles, >=0
-    comm : :py:class:`MPI.Comm`
+    comm : :py:class:`MPI.comm`
         communicator for the collective operation.
 
     Returns

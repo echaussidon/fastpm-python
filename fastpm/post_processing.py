@@ -4,6 +4,7 @@ import argparse
 
 import numpy as np
 
+from .io import BigFile
 from .fof import FOF
 from .memory_monitor import MemoryMonitor, plot_memory
 
@@ -21,42 +22,6 @@ def logger_info(logger, msg, rank, mpiroot=0):
     """Print something with the logger only for the rank == mpiroot to avoid duplication of message."""
     if rank == mpiroot:
         logger.info(msg)
-
-
-def load_bigfile(path, dataset='1/', comm=None):
-    """
-    Load BigFile with BigFileCatalog removing FuturWarning. Just pass the commutator to spread the file in all the processes.
-
-    Parameters
-    ----------
-    path : str
-        Path where the BigFile is.
-    dataset: str
-        Which sub-dataset do you want to read from the BigFile ?
-    comm : MPI commutator
-        Pass the current commutator if you want to use MPI.
-
-    Return
-    ------
-    cat : BigFileCatalog
-        BigFileCatalog object from nbodykit.
-
-    """
-    from nbodykit.source.catalog.file import BigFileCatalog
-
-    # to remove the following warning:
-    # FutureWarning: Passing (type, 1) or '1type' as a synonym of type is deprecated; in a future version of numpy, it will be understood as (type, (1,)) / '(1,)type'.
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-
-        logger_info(logger, f'Read {path}', comm.Get_rank())
-        # read simulation output
-        cat = BigFileCatalog(path, dataset=dataset, comm=comm)
-        # add BoxSize attributs (mandatory for fof)
-        cat.attrs['BoxSize'] = np.array([cat.attrs['boxsize'][0], cat.attrs['boxsize'][0], cat.attrs['boxsize'][0]])
-
-    return cat
 
 
 def load_fiducial_cosmo():
@@ -92,18 +57,15 @@ def build_halos_catalog(particles, linking_length=0.2, nmin=8, particle_mass=1e1
     """
     # Run the fof algorithm
     fof = FOF(particles, linking_length, nmin, memory_monitor=memory_monitor)
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     # build halos catalog:
     halos, attrs = fof.find_features()
+    if memory_monitor is not None: memory_monitor()
 
     # remove halos with lenght == 0
-    if memory_monitor is not None:
-        memory_monitor()
     halos = halos[halos['Length'] > 0]
-    if memory_monitor is not None:
-        memory_monitor()
+    if memory_monitor is not None: memory_monitor()
 
     # meta-data
     attrs = particles.attrs.copy()
@@ -153,8 +115,8 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
     from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
+    mpicomm = MPI.COMM_WORLD
+    rank = mpicomm.Get_rank()
     start_ini = MPI.Wtime()
 
     args = collect_argparser()
@@ -165,17 +127,20 @@ if __name__ == '__main__':
     mem_monitor()
 
     start = MPI.Wtime()
-    particles = load_bigfile(os.path.join(sim, f'fpm-{aout}'), comm=comm)
+    particles = BigFile(os.path.join(sim, f'fpm-{aout}'), dataset='1/', mode='r', mpicomm=mpicomm)
+    particles.attrs['BoxSize'] = np.array([particles.attrs['boxsize'][0], particles.attrs['boxsize'][0], particles.attrs['boxsize'][0]])
+    particles.Position = particles.read('Position')
+    particles.Velocity = particles.read('Velocity')
     mem_monitor()
     logger_info(logger, f"Number of DM particles: {particles.csize} read in {MPI.Wtime() - start:2.2f} s.", rank)
 
     start = MPI.Wtime()
     # need to use wrap = True since some particles are outside the box
     # no neeed to select rank == 0 it is automatic in .save method
-    CatalogFFTPower(data_positions1=particles['Position'].compute(), wrap=True,
+    CatalogFFTPower(data_positions1=particles['Position'], wrap=True,
                     edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
                     boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
-                    position_type='pos', mpicomm=comm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
+                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
     mem_monitor()
     logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
 
@@ -186,45 +151,34 @@ if __name__ == '__main__':
     mem_monitor()
     halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank, memory_monitor=mem_monitor)
     attrs['particle_mass'] = particle_mass
-    attrs['min_mass_halos'] = args.min_mass_halos
+    attrs['min_mass_halos'] = args.nmin * particle_mass
     mem_monitor()
-    logger_info(logger, f"Find halos (with nmin = {args.nmin}) done in {MPI.Wtime() - start:.2f} s.", rank)
+    logger_info(logger, f"Find halos (with nmin = {args.nmin} -- particle mass = {particle_mass}) done in {MPI.Wtime() - start:.2f} s.", rank)
 
     start = MPI.Wtime()
-    from bigfile import FileMPI
-    with FileMPI(comm, os.path.join(sim, f'halos-{aout}'), create=True) as ff:
-        with ff.create('Header') as bb:
-            keylist = ['N_eff', 'Omega0_Lambda', 'Omega0_b', 'Omega0_m', 'RSDFactor', 'T0_cmb', 'Time', 'boxsize', 'fnl', 'gnl', 'h', 'kmax_primordial_over_knyquist',
-                       'nc', 'ndim', 'pm_nc_factor', 'resampler', 'seed', 'shift', 'unitary', 'use_non_gaussianity', 'particle_mass', 'nmin', 'min_mass_halos']
-            for key in keylist:
-                try:
-                    bb.attrs[key] = attrs[key]
-                except KeyError:
-                    pass
-        # work with center of mass
-        ff.create_from_array('1/Position', halos['CMPosition'])
-        ff.create_from_array('1/Velocity', halos['CMVelocity'])
-        ff.create_from_array('1/Mass', attrs['particle_mass'] * halos['Length'])
+    halos_file = BigFile(os.path.join(sim, f'halos-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
+    halos_file.attrs = attrs
+    halos_file.write({'Position': halos['CMPosition'], 'Velocity': halos['CMVelocity'], 'Mass': attrs['particle_mass'] * halos['Length']})
     mem_monitor()
 
-    nbr_halos = comm.reduce(halos['Length'].size, op=MPI.SUM, root=0)
+    # Collect the number of halos --> just to print the information
+    nbr_halos = mpicomm.reduce(halos['Length'].size, op=MPI.SUM, root=0)
     mem_monitor()
     logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
     start = MPI.Wtime()
-    position = halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos]
     mem_monitor()
-    CatalogFFTPower(data_positions1=position,
+    CatalogFFTPower(data_positions1=halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos],
                     edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
                     boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
-                    position_type='pos', mpicomm=comm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
+                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
     mem_monitor()
     logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)
 
     mem_monitor.stop_monitoring()
-    comm.Barrier()
+    mpicomm.Barrier()
 
     if rank == 0:
         plot_memory(sim, prefix=f'halos-{aout}-')
