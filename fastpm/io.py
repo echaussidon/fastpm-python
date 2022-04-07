@@ -1,46 +1,20 @@
 """
 
-Taken from: https://github.com/adematti/mockfactory/blob/main/mockfactory/catalog.py
+Easy way to read and write BigFile with MPI
 
+BaseFile is taken from: https://github.com/adematti/mockfactory/blob/main/mockfactory/catalog.py
 I/O for bifgile is adapted from https://github.com/bccp/nbodykit/blob/master/nbodykit/io/bigfile.py
-
-Base classes to handle catalog of objects.
 
 """
 
 import os
-import functools
-
+import logging
 import numpy as np
 
 from .utils import mkdir, ScatterArray
 
-import logging
 
 logger = logging.getLogger('I/O')
-
-
-def _multiple_columns(column):
-    return isinstance(column, (list, tuple))
-
-
-def vectorize_columns(func):
-    @functools.wraps(func)
-    def wrapper(self, column, **kwargs):
-        if not _multiple_columns(column):
-            return func(self, column, **kwargs)
-        toret = [func(self, col, **kwargs) for col in column]
-        if all(t is None for t in toret):  # in case not broadcast to all ranks
-            return None
-        return np.asarray(toret)
-    return wrapper
-
-
-def _get_shape(size, itemshape):
-    # join size and itemshape to get total shape
-    if np.ndim(itemshape) == 0:
-        return (size, itemshape)
-    return (size,) + tuple(itemshape)
 
 
 def _dict_to_array(data, struct=True):
@@ -101,11 +75,14 @@ class BaseFile(object):
         if 'r' in mode:
             self._read_header()
 
-    def __enter__(self):
+    def __enter__(self):  # to be used with Class() as c:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         pass
+
+    def __getitem__(self, item):  # to call the attributs of the class as a dictionnary
+        return self.__dict__[item]
 
     def is_mpi_root(self):
         """Whether current rank is root."""
@@ -303,6 +280,6 @@ class BigFile(BaseFile):
                         bb.attrs[key] = self.attrs[key]
                     except KeyError:
                         pass
-            # wrtie data
+            # write the data
             for name in data.keys():
                 file.create_from_array(self.dataset + name, data[name])
