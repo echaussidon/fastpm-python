@@ -37,14 +37,13 @@ RUN python -m pip install mpi4py
 
 # install python package to run fastpm:
 RUN python -m pip install Cython
-RUN python -m pip install numpy scipy matplotlib pandas astropy
+RUN python -m pip install numpy scipy matplotlib psutil
 RUN python -m pip install git+https://github.com/cosmodesi/pycorr#egg=pycorr[mpi,jackknife,corrfunc]
 RUN python -m pip install git+https://github.com/cosmodesi/pypower
 RUN python -m pip install git+https://github.com/cosmodesi/cosmoprimo#egg=cosmoprimo[class]
-RUN python -m pip install pfft-python pmesh bigfile nbodykit
-RUN python -m pip install psutil
+RUN python -m pip install pfft-python pmesh bigfile
 
 
 # to reinstall fastpm-python increase the value of ARG
-ARG nn=4
+ARG nn=0
 RUN python -m pip install git+https://github.com/echaussidon/fastpm-python
