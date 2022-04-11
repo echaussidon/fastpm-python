@@ -1,6 +1,5 @@
 from setuptools import setup
-import numpy
-import os
+
 
 def find_version(path):
     import re
@@ -17,8 +16,7 @@ setup(
     name="fastpm", version=find_version("fastpm/version.py"),
     author="Yu Feng",
     description="FastPM in Python",
-    package_dir = {'fastpm': 'fastpm'},
-    packages= ['fastpm', 'fastpm.force', 'fastpm.tests'],
-    install_requires=['cython', 'numpy', 'scipy', 'pmesh', 'nbodykit'],
+    package_dir={'fastpm': 'fastpm'},
+    packages=['fastpm', 'fastpm.force', 'fastpm.tests'],
+    install_requires=['cython', 'numpy', 'scipy', 'pmesh'],
 )
-
