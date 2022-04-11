@@ -182,6 +182,10 @@ def main(comm, rank, path='.', args=None):
     # Evolution of particles via fastpm computation:
     solver.nbody(state, stepping=leapfrog(config['stages']), monitor=monitor)
 
+    # Stop tracking memory and wait all the process to be synchronized outside the main function.
+    mem_monitor.stop_monitoring()
+    comm.Barrier()
+
 
 if __name__ == '__main__':
     # to remove the following warning from pmesh (arnaud l'a corrigé sur son github mais ok)
@@ -204,6 +208,7 @@ if __name__ == '__main__':
     # launch main program
     main(comm, rank, ns.config)
 
+    # plot memory usage
     if rank == 0:
         logger.info(f"fastpm-python took {MPI.Wtime() - start_ini:2.2f} s.")
 
