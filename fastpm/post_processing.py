@@ -147,13 +147,15 @@ if __name__ == '__main__':
     # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
     start = MPI.Wtime()
     cosmo = load_fiducial_cosmo()
+    # for the units https://cosmoprimo.readthedocs.io/en/latest/api/api.html?highlight=rho_crit#cosmoprimo.camb.Background.rho_crit
+    # here particle mass is in Solar Mass.
     particle_mass = (cosmo.get_background().rho_cdm(1 / float(aout) - 1) + cosmo.get_background().rho_b(1 / float(aout) - 1)) / cosmo.h * 1e10 * particles.attrs['boxsize'][0]**3 / particles.csize  # units: Solar Mass
     mem_monitor()
     halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank, memory_monitor=mem_monitor)
     attrs['particle_mass'] = particle_mass
     attrs['min_mass_halos'] = args.nmin * particle_mass
     mem_monitor()
-    logger_info(logger, f"Find halos (with nmin = {args.nmin} -- particle mass = {particle_mass}) done in {MPI.Wtime() - start:.2f} s.", rank)
+    logger_info(logger, f"Find halos (with nmin = {args.nmin} -- particle mass = {particle_mass:2.2e}) done in {MPI.Wtime() - start:.2f} s.", rank)
 
     start = MPI.Wtime()
     halos_file = BigFile(os.path.join(sim, f'halos-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
