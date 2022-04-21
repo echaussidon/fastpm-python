@@ -86,6 +86,13 @@ def collect_argparser():
     parser.add_argument("--aout", type=str, required=False, default='1.0000',
                         help="scale factor at which the particles are saved (e.g) '0.3300' or '1.0000'")
 
+    parser.add_argument("--subsampling", type=str, required=False, default='False',
+                        help="If True subsample particles, only --subsampling_ratio % of particles are kept")
+    parser.add_argument("--subsampling_nbr", type=float, required=False, default=3 * 34,
+                        help="Keep one particle on subsampling_nbr. WARNING: this number should be divided by 3 (e.g.) 3*34")
+    parser.add_argument("--delet_original", type=str, required=False, default='False',
+                        help="If True supress the original particle file to save memory")
+
     parser.add_argument("--nmesh", type=int, required=False, default=1024,
                         help="nmesh used for the power spectrum computation")
 
@@ -96,8 +103,8 @@ def collect_argparser():
     parser.add_argument("--k_nbins", type=float, required=False, default=80,
                         help="to build np.geomspace(k_min, k_max, k_nbins)")
 
-    parser.add_argument("--min_mass_halos", type=float, required=False, default=1e13,
-                        help="minimal mass of the halos to be kept")
+    parser.add_argument("--min_mass_halos", type=float, required=False, default=2.25e12,
+                        help="minimal mass of the halos kept during the halos power spectrum computation")
     parser.add_argument("--nmin", type=int, required=False, default=8,
                         help="minimal number of particle to form a halos")
 
@@ -177,10 +184,37 @@ if __name__ == '__main__':
     mem_monitor()
     logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
 
-    logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)
+    if args.subsampling == 'True':
+        start = MPI.Wtime()
+        logger_info(logger, 'Start subsampling with subsampling_nbr={args.subsampling_nbr}', rank)
+
+        nbr_particles = mpicomm.allgather(particles.size)
+        kept = np.arange(0, particles.size, args.subsampling_nbr) + int(np.sum(nbr_particles[:rank]) % args.subsampling_nbr)
+        kept = kept[kept < particles.size]  # remove index out of range
+
+        # save subsampled particles
+        sub_particles = BigFile(os.path.join(sim, f'fpm-subsamp-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
+        sub_particles.attrs = particles.attrs
+        sub_particles.attrs['subsampling_ratio'] = 1 / args.subsampling_nbr
+        sub_particles.write({'Position': particles['Position'][kept], 'Velocity': particles['Velocity'][kept]})
+
+        # compute power spectrum of subsampled particles:
+        CatalogFFTPower(data_positions1=particles['Position'][kept], wrap=True,
+                        edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
+                        boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
+                        position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-subsamp-power-{aout}.npy'))
+        mem_monitor()
+        logger_info(logger, f"Subsampling (from {particles.csize} to approx. {particles.csize * args.subsampling_ratio}) done in {MPI.Wtime() - start:2.2f} s.", rank)
 
     mem_monitor.stop_monitoring()
     mpicomm.Barrier()
 
     if rank == 0:
         plot_memory(sim, prefix=f'halos-{aout}-')
+
+    if args.delet_original == 'True':
+        if rank == 0:
+            import shutil
+            shutil.rmtree(os.path.join(sim, f'fpm-{aout}'), ignore_errors=True)
+
+    logger_info(logger, f"Post processing took {MPI.Wtime() - start_ini:2.2f} s.", rank)

@@ -1,13 +1,16 @@
 """
-Credit: This code is copy from https://github.com/bccp/nbodykit/blob/master/nbodykit/utils.py.
+Credit: This code is copy from
+             https://github.com/bccp/nbodykit/blob/master/nbodykit/utils.py.
+             https://github.com/bccp/nbodykit/blob/master/nbodykit/batch.py.
+             https://github.com/bccp/nbodykit/blob/master/nbodykit/__init__.py
+             https://github.com/cosmodesi/mpytools/blob/main/mpytools/random.py
+
         To remove the dependence at nbodykit.
 """
 
-import numpy
+import numpy as np
 from mpi4py import MPI
-import warnings
 import os
-
 import mpsort
 
 
@@ -17,78 +20,6 @@ def mkdir(dirname):
         os.makedirs(dirname)  # MPI...
     except OSError:
         return
-
-
-def is_structured_array(arr):
-    """
-    Test if the input array is a structured array
-    by testing for `dtype.names`
-    """
-    if not isinstance(arr, numpy.ndarray) or not hasattr(arr, 'dtype'):
-        return False
-    return arr.dtype.char == 'V'
-
-
-def get_data_bounds(data, comm, selection=None):
-
-    """
-    Return the global minimum/maximum of a numpy/dask array along the
-    first axis.
-
-    This is computed in chunks to avoid memory errors on large data.
-
-    Parameters
-    ----------
-    data : numpy.ndarray or dask.array.Array
-        the data to find the bounds of
-    comm :
-        the MPI communicator
-
-    Returns
-    -------
-    min, max :
-        the min/max of ``data``
-    """
-    import dask.array as da
-
-    # local min/max on this rank
-    dmin = numpy.ones(data.shape[1:]) * (numpy.inf)
-    dmax = numpy.ones_like(dmin) * (-numpy.inf)
-
-    # max size
-    Nlocalmax = max(comm.allgather(len(data)))
-
-    # compute in chunks to avoid memory error
-    chunksize = 1024**2 * 8
-    for i in range(0, Nlocalmax, chunksize):
-        s = slice(i, i + chunksize)
-
-        if len(data) != 0:
-
-            # selection has to be computed many times when data is `large`.
-            if selection is not None:
-                sel = selection[s]
-                if isinstance(selection, da.Array):
-                    sel = sel.compute()
-
-            # be sure to use the source to compute
-            d = data[s]
-            if isinstance(data, da.Array):
-                d = d.compute()
-
-            # select
-            if selection is not None:
-                d = d[sel]
-
-            # update min/max on this rank
-            dmin = numpy.min([d.min(axis=0), dmin], axis=0)
-            dmax = numpy.max([d.max(axis=0), dmax], axis=0)
-
-    # global min/max across all ranks
-    dmin = numpy.asarray(comm.allgather(dmin)).min(axis=0)
-    dmax = numpy.asarray(comm.allgather(dmax)).max(axis=0)
-
-    return dmin, dmax
 
 
 def split_size_3d(s):
@@ -122,21 +53,6 @@ def split_size_3d(s):
     return a, b, c
 
 
-def deprecate(name, alternative, alt_name=None):
-    """
-    This is a decorator which can be used to mark functions
-    as deprecated. It will result in a warning being emmitted
-    when the function is used.
-    """
-    alt_name = alt_name or alternative.__name__
-
-    def wrapper(*args, **kwargs):
-        warnings.warn("%s is deprecated. Use %s instead" % (name, alt_name),
-                      FutureWarning, stacklevel=2)
-        return alternative(*args, **kwargs)
-    return wrapper
-
-
 def GatherArray(data, comm, root=0):
     """
     Gather the input data array from all ranks to the specified ``root``.
@@ -159,12 +75,12 @@ def GatherArray(data, comm, root=0):
     recvbuffer : array_like, None
         the gathered data on root, and `None` otherwise
     """
-    if not isinstance(data, numpy.ndarray):
+    if not isinstance(data, np.ndarray):
         raise ValueError("`data` must by numpy array in GatherArray")
 
     # need C-contiguous order
     if not data.flags['C_CONTIGUOUS']:
-        data = numpy.ascontiguousarray(data)
+        data = np.ascontiguousarray(data)
     local_length = data.shape[0]
 
     # check dtypes and shapes
@@ -190,7 +106,7 @@ def GatherArray(data, comm, root=0):
 
         # the return array
         if root is Ellipsis or comm.rank == root:
-            recvbuffer = numpy.empty(newshape, dtype=dtypes[0], order='C')
+            recvbuffer = np.empty(newshape, dtype=dtypes[0], order='C')
         else:
             recvbuffer = None
 
@@ -223,7 +139,7 @@ def GatherArray(data, comm, root=0):
     dtype = data.dtype
 
     # setup the custom dtype
-    duplicity = numpy.product(numpy.array(shape[1:], 'intp'))
+    duplicity = np.product(np.array(shape[1:], 'intp'))
     itemsize = duplicity * dtype.itemsize
     dt = MPI.BYTE.Create_contiguous(itemsize)
     dt.Commit()
@@ -235,16 +151,16 @@ def GatherArray(data, comm, root=0):
 
     # the return array
     if root is Ellipsis or comm.rank == root:
-        recvbuffer = numpy.empty(newshape, dtype=dtype, order='C')
+        recvbuffer = np.empty(newshape, dtype=dtype, order='C')
     else:
         recvbuffer = None
 
     # the recv counts
     counts = comm.allgather(local_length)
-    counts = numpy.array(counts, order='C')
+    counts = np.array(counts, order='C')
 
     # the recv offsets
-    offsets = numpy.zeros_like(counts, order='C')
+    offsets = np.zeros_like(counts, order='C')
     offsets[1:] = counts.cumsum()[:-1]
 
     # gather to root
@@ -284,13 +200,13 @@ def ScatterArray(data, comm, root=0, counts=None):
     """
 
     if counts is not None:
-        counts = numpy.asarray(counts, order='C')
+        counts = np.asarray(counts, order='C')
         if len(counts) != comm.size:
             raise ValueError("counts array has wrong length!")
 
     # check for bad input
     if comm.rank == root:
-        bad_input = not isinstance(data, numpy.ndarray)
+        bad_input = not isinstance(data, np.ndarray)
     else:
         bad_input = None
     bad_input = comm.bcast(bad_input)
@@ -300,7 +216,7 @@ def ScatterArray(data, comm, root=0, counts=None):
     if comm.rank == 0:
         # need C-contiguous order
         if not data.flags['C_CONTIGUOUS']:
-            data = numpy.ascontiguousarray(data)
+            data = np.ascontiguousarray(data)
         shape_and_dtype = (data.shape, data.dtype)
     else:
         shape_and_dtype = None
@@ -319,11 +235,11 @@ def ScatterArray(data, comm, root=0, counts=None):
 
     # initialize empty data on non-root ranks
     if comm.rank != root:
-        np_dtype = numpy.dtype((dtype, shape[1:]))
-        data = numpy.empty(0, dtype=np_dtype)
+        np_dtype = np.dtype((dtype, shape[1:]))
+        data = np.empty(0, dtype=np_dtype)
 
     # setup the custom dtype
-    duplicity = numpy.product(numpy.array(shape[1:], 'intp'))
+    duplicity = np.product(np.array(shape[1:], 'intp'))
     itemsize = duplicity * dtype.itemsize
     dt = MPI.BYTE.Create_contiguous(itemsize)
     dt.Commit()
@@ -342,15 +258,15 @@ def ScatterArray(data, comm, root=0, counts=None):
         newshape[0] = counts[comm.rank]
 
     # the return array
-    recvbuffer = numpy.empty(newshape, dtype=dtype, order='C')
+    recvbuffer = np.empty(newshape, dtype=dtype, order='C')
 
     # the send counts, if not provided
     if counts is None:
         counts = comm.allgather(newlength)
-        counts = numpy.array(counts, order='C')
+        counts = np.array(counts, order='C')
 
     # the send offsets
-    offsets = numpy.zeros_like(counts, order='C')
+    offsets = np.zeros_like(counts, order='C')
     offsets[1:] = counts.cumsum()[:-1]
 
     # do the scatter
@@ -358,26 +274,6 @@ def ScatterArray(data, comm, root=0, counts=None):
     comm.Scatterv([data, (counts, offsets), dt], [recvbuffer, dt])
     dt.Free()
     return recvbuffer
-
-
-def FrontPadArray(array, front, comm):
-    """ Padding an array in the front with items before this rank."""
-    N = numpy.array(comm.allgather(len(array)), dtype='intp')
-    offsets = numpy.cumsum(numpy.concatenate([[0], N], axis=0))
-    mystart = offsets[comm.rank] - front
-    torecv = (offsets[:-1] + N) - mystart
-
-    torecv[torecv < 0] = 0  # before mystart
-    torecv[torecv > front] = 0  # no more than needed
-    torecv[torecv > N] = N[torecv > N]  # fully enclosed
-
-    if comm.allreduce(torecv.sum() != front, MPI.LOR):
-        raise ValueError("cannot work out a plan to padd items. Some front values are too large. %d %d" % (torecv.sum(), front))
-
-    tosend = comm.alltoall(torecv)
-    sendbuf = [array[-items:] if items > 0 else array[0:0] for i, items in enumerate(tosend)]
-    recvbuf = comm.alltoall(sendbuf)
-    return numpy.concatenate(list(recvbuf) + [array], axis=0)
 
 
 class DistributedArray(object):
@@ -423,8 +319,8 @@ class DistributedArray(object):
     def __init__(self, local, comm):
         self.comm = comm
 
-        shape = numpy.array(local, copy=False).shape
-        dtype = numpy.array(local, copy=False).dtype if len(local) else None
+        shape = np.array(local, copy=False).shape
+        dtype = np.array(local, copy=False).dtype if len(local) else None
 
         self.dtype = DistributedArray._find_dtype(dtype, comm)
         self.cshape = DistributedArray._find_cshape(shape, comm)
@@ -446,7 +342,7 @@ class DistributedArray(object):
         if cshape != cshape1:
             raise ValueError("input cshape is inconsistent %s %s" % (cshape, cshape1))
 
-        local = numpy.empty(shape, dtype=dtype)
+        local = np.empty(shape, dtype=dtype)
         return DistributedArray(local, comm=comm)
 
     @classmethod
@@ -469,17 +365,17 @@ class DistributedArray(object):
         if localsize is None:
             localsize = sum([len(arg.local) for arg in args])
 
-        eldtype = numpy.result_type(*[arg.local for arg in args])
+        eldtype = np.result_type(*[arg.local for arg in args])
 
         dtype = [('index', 'intp'), ('el', eldtype)]
 
-        inp = numpy.empty(localsize_in, dtype=dtype)
-        out = numpy.empty(localsize, dtype=dtype)
+        inp = np.empty(localsize_in, dtype=dtype)
+        out = np.empty(localsize, dtype=dtype)
 
         go = 0
         o = 0
         for arg in args:
-            inp['index'][o:o + len(arg.local)] = go + arg.coffset + numpy.arange(len(arg.local), dtype='intp')
+            inp['index'][o:o + len(arg.local)] = go + arg.coffset + np.arange(len(arg.local), dtype='intp')
             inp['el'][o:o + len(arg.local)] = arg.local
             o = o + len(arg.local)
             go = go + arg.cshape[0]
@@ -515,14 +411,14 @@ class DistributedArray(object):
         # prev, next: -> _ to avoid a warning
         _, next = self.topology.prev(), self.topology.next()
 
-        junk, label = numpy.unique(self.local, return_inverse=True)
+        junk, label = np.unique(self.local, return_inverse=True)
 
         if len(label) == 0:
             # work around numpy bug (<=1.13.3) when label is empty it
             # spits out booleans?? booleans!!
             # this causes issues when type cast rules in numpy
             # are tighten up.
-            label = numpy.int64(label)
+            label = np.int64(label)
 
         if len(self.local) == 0:
             Nunique = 0
@@ -535,7 +431,7 @@ class DistributedArray(object):
             else:
                 Nunique = len(junk)
 
-        label += numpy.sum(self.comm.allgather(Nunique)[:self.comm.rank], dtype='intp')
+        label += np.sum(self.comm.allgather(Nunique)[:self.comm.rank], dtype='intp')
         return DistributedArray(label, self.comm)
 
     def bincount(self, weights=None, local=False, shared_edges=True):
@@ -582,7 +478,7 @@ class DistributedArray(object):
 
         # locally, we will bincount from offset to whereever we end
 
-        N = numpy.bincount(self.local - offset, weights)
+        N = np.bincount(self.local - offset, weights)
 
         if local:
             return N
