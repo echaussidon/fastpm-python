@@ -18,5 +18,5 @@ setup(
     description="FastPM in Python",
     package_dir={'fastpm': 'fastpm'},
     packages=['fastpm', 'fastpm.force', 'fastpm.tests'],
-    install_requires=['cython', 'numpy', 'scipy', 'pmesh'],
+    install_requires=['cython', 'numpy', 'scipy', 'pmesh', 'kdcount'],
 )
