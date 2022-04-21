@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
         nbr_particles = mpicomm.allgather(particles.size)
         kept = np.arange(0, particles.size, args.subsampling_nbr) + int(np.sum(nbr_particles[:rank]) % args.subsampling_nbr)
-        kept = kept[kept < particles.size]  # remove index out of range
+        kept = kept[kept < particles.size].astype(int)  # remove index out of range
 
         # save subsampled particles
         sub_particles = BigFile(os.path.join(sim, f'fpm-subsamp-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
@@ -204,7 +204,7 @@ if __name__ == '__main__':
                         boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
                         position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-subsamp-power-{aout}.npy'))
         mem_monitor()
-        logger_info(logger, f"Subsampling (from {particles.csize} to approx. {particles.csize * args.subsampling_ratio}) done in {MPI.Wtime() - start:2.2f} s.", rank)
+        logger_info(logger, f"Subsampling (from {particles.csize} to approx. {particles.csize * args.subsampling_nbr}) done in {MPI.Wtime() - start:2.2f} s.", rank)
 
     mem_monitor.stop_monitoring()
     mpicomm.Barrier()
