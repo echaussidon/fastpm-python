@@ -19,6 +19,7 @@ What we need to do:
 ## 2. How to build a docker image ?
 
     * To build the image (warning installing MPICH is quite long) run `docker build -t edmondchau/fastpm-python .`
+    * To add a tag do `docker tag edmondchau/fastpm-python edmondchau/fastpm-python:tagada`. Note you can direclty do `docker build -t edmondchau/fastpm-python:tagada .` by default the tag is `latest`.
     * To upload the image in docker hub run `docker push edmondchau/fastpm-python` (the repo edmondchau/fastpm-python is already created before pushing)
 
 ## 3. How to use the image in your computer ?

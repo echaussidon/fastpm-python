@@ -41,9 +41,8 @@ RUN python -m pip install numpy scipy matplotlib psutil
 RUN python -m pip install git+https://github.com/cosmodesi/pycorr#egg=pycorr[mpi,jackknife,corrfunc]
 RUN python -m pip install git+https://github.com/cosmodesi/pypower
 RUN python -m pip install git+https://github.com/cosmodesi/cosmoprimo#egg=cosmoprimo[class]
-RUN python -m pip install pfft-python pmesh bigfile
-
+RUN python -m pip install pfft-python pmesh bigfile kdcount
 
 # to reinstall fastpm-python increase the value of ARG
-ARG nn=0
+ARG nn=1
 RUN python -m pip install git+https://github.com/echaussidon/fastpm-python
