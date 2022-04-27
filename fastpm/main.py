@@ -48,10 +48,11 @@ class Config(dict):
         self['gnl'] = 0.
 
         # default param for power spectrum computation
-        self['power_kedges'] = np.geomspace(1e-3, 5e-1, 80)
+        self['power_kedges'] = np.geomspace(1e-3, 1e0, 80)
 
         local = {}  # these names will be usable in the config file, can add cosmo to use specific cosmology.
         local['linspace'] = np.linspace
+        local['arange'] = np.arange
         local['geomspace'] = np.geomspace
         local['autostages'] = autostages
 
