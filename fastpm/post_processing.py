@@ -134,7 +134,8 @@ if __name__ == '__main__':
     sim = os.path.join(args.path_to_sim, args.sim)
     aout = args.aout
 
-    mem_monitor = MemoryMonitor(log_file=os.path.join(sim, 'memory-monitor', f'halos-{aout}-memory_monitor_rank_{rank}.txt'))
+    mem_monitor_prefix = 'halos' if args.compute_halos else 'subsampling'
+    mem_monitor = MemoryMonitor(log_file=os.path.join(sim, 'memory-monitor', f'{mem_monitor_prefix}-{aout}-memory_monitor_rank_{rank}.txt'))
     mem_monitor()
 
     start = MPI.Wtime()
@@ -216,7 +217,7 @@ if __name__ == '__main__':
     mpicomm.Barrier()
 
     if rank == 0:
-        plot_memory(sim, prefix=f'halos-{aout}-')
+        plot_memory(sim, prefix=f'{mem_monitor_prefix}-{aout}-')
 
     if args.delet_original == 'True':
         if rank == 0:
