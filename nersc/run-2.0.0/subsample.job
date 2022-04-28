@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#SBATCH --image=edmondchau/fastpm-python:latest
+#SBATCH --nodes=1600
+#SBATCH --qos=regular
+#SBATCH --time=00:30:00
+#SBATCH --constraint=knl
+#SBTACH --account=desi
+
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=edmond.chaussidon@cea.fr
+
+#SBATCH --job-name=subsampling
+#SBATCH --output="%x-%j.out"
+
+# Problem with shifter at NERSC, it does not clear the PYTHONPATH... (exactly what we do not want to do...)
+export PYTHONPATH=''
+
+# Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
+export OMP_NUM_THREADS=4
+nproc=108800
+
+# Timer initialisation:
+SECONDS=0
+
+if [ -e /global/cscratch1/sd/edmondc/Mocks/$1/halos-$2 ]
+then
+    echo
+    echo "Start post-processing at aout: $2"
+    echo
+    srun -n $nproc_proc shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_power True --compute_halos False --nmesh 2048 --k_max 1.5e0 --subsampling True --subsampling_nbr 102 --delet_original True
+    echo
+else
+    echo
+    echo "Halos file does not exist --> we do not subsample the simulation"
+    echo /global/cscratch1/sd/edmondc/Mocks/$1/halos-$2
+    echo
+fi
+
+if (( $SECONDS > 3600 )); then
+    let "hours=SECONDS/3600"
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $hours hour(s), $minutes minute(s) and $seconds second(s)"
+elif (( $SECONDS > 60 )); then
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $minutes minute(s) and $seconds second(s)"
+else
+    echo "Completed in $SECONDS seconds"
+fi
+echo

@@ -86,6 +86,11 @@ def collect_argparser():
     parser.add_argument("--aout", type=str, required=False, default='1.0000',
                         help="scale factor at which the particles are saved (e.g) '0.3300' or '1.0000'")
 
+    parser.add_argument("--compute_power", type=str, required=False, default='True',
+                        help="If True, then compute the particle power spectrum.")
+    parser.add_argument("--compute_halos", type=str, required=False, default='True',
+                        help="If True, then search halos with FOF algorithm. Take care, need to reduce the number of proc but not the number of nodes ...")
+
     parser.add_argument("--subsampling", type=str, required=False, default='False',
                         help="If True subsample particles, only --subsampling_ratio % of particles are kept")
     parser.add_argument("--subsampling_nbr", type=float, required=False, default=3 * 34,
@@ -95,13 +100,12 @@ def collect_argparser():
 
     parser.add_argument("--nmesh", type=int, required=False, default=1024,
                         help="nmesh used for the power spectrum computation")
-
-    parser.add_argument("--k_min", type=float, required=False, default=5e-3,
-                        help="to build np.geomspace(k_min, k_max, k_nbins)")
-    parser.add_argument("--k_max", type=float, required=False, default=3e0,
-                        help="to build np.geomspace(k_min, k_max, k_nbins)")
-    parser.add_argument("--k_nbins", type=float, required=False, default=80,
-                        help="to build np.geomspace(k_min, k_max, k_nbins)")
+    parser.add_argument("--k_min", type=float, required=False, default=1e-3,
+                        help="to build np.arange(k_min, k_max, kbin)")
+    parser.add_argument("--k_max", type=float, required=False, default=2e0,
+                        help="to build np.arange(k_min, k_max, kbin)")
+    parser.add_argument("--kbin", type=float, required=False, default=1e-3,
+                        help="to build np.arange(k_min, k_max, kbin)")
 
     parser.add_argument("--min_mass_halos", type=float, required=False, default=2.25e12,
                         help="minimal mass of the halos kept during the halos power spectrum computation")
@@ -141,48 +145,50 @@ if __name__ == '__main__':
     mem_monitor()
     logger_info(logger, f"Number of DM particles: {particles.csize} read in {MPI.Wtime() - start:2.2f} s.", rank)
 
-    start = MPI.Wtime()
-    # need to use wrap = True since some particles are outside the box
-    # no neeed to select rank == 0 it is automatic in .save method
-    CatalogFFTPower(data_positions1=particles['Position'], wrap=True,
-                    edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-                    boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
-                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
-    mem_monitor()
-    logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
+    if args.compute_power == 'True':
+        start = MPI.Wtime()
+        # need to use wrap = True since some particles are outside the box
+        # no neeed to select rank == 0 it is automatic in .save method
+        CatalogFFTPower(data_positions1=particles['Position'], wrap=True,
+                        edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0), nmesh=args.nmesh,
+                        boxsize=particles.attrs['boxsize'][0], boxcenter=particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
+                        position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-power-{aout}.npy'))
+        mem_monitor()
+        logger_info(logger, f'CatalogFFTPower with particles done in {MPI.Wtime() - start:2.2f} s.', rank)
 
-    # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
-    start = MPI.Wtime()
-    cosmo = load_fiducial_cosmo()
-    # for the units https://cosmoprimo.readthedocs.io/en/latest/api/api.html?highlight=rho_crit#cosmoprimo.camb.Background.rho_crit
-    # here particle mass is in Solar Mass.
-    particle_mass = (cosmo.get_background().rho_cdm(1 / float(aout) - 1) + cosmo.get_background().rho_b(1 / float(aout) - 1)) / cosmo.h * 1e10 * particles.attrs['boxsize'][0]**3 / particles.csize  # units: Solar Mass
-    mem_monitor()
-    halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank, memory_monitor=mem_monitor)
-    attrs['particle_mass'] = particle_mass
-    attrs['min_mass_halos'] = args.nmin * particle_mass
-    mem_monitor()
-    logger_info(logger, f"Find halos (with nmin = {args.nmin} -- particle mass = {particle_mass:2.2e}) done in {MPI.Wtime() - start:.2f} s.", rank)
+    if args.compute_halos == 'True':
+        # take care if -N != 1 --> particles will be spread in the different nodes --> csize instead .size to get the full lenght
+        start = MPI.Wtime()
+        cosmo = load_fiducial_cosmo()
+        # for the units https://cosmoprimo.readthedocs.io/en/latest/api/api.html?highlight=rho_crit#cosmoprimo.camb.Background.rho_crit
+        # here particle mass is in Solar Mass.
+        particle_mass = (cosmo.get_background().rho_cdm(1 / float(aout) - 1) + cosmo.get_background().rho_b(1 / float(aout) - 1)) / cosmo.h * 1e10 * particles.attrs['boxsize'][0]**3 / particles.csize  # units: Solar Mass
+        mem_monitor()
+        halos, attrs = build_halos_catalog(particles, nmin=args.nmin, rank=rank, memory_monitor=mem_monitor)
+        attrs['particle_mass'] = particle_mass
+        attrs['min_mass_halos'] = args.nmin * particle_mass
+        mem_monitor()
+        logger_info(logger, f"Find halos (with nmin = {args.nmin} -- particle mass = {particle_mass:2.2e}) done in {MPI.Wtime() - start:.2f} s.", rank)
 
-    start = MPI.Wtime()
-    halos_file = BigFile(os.path.join(sim, f'halos-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
-    halos_file.attrs = attrs
-    halos_file.write({'Position': halos['CMPosition'], 'Velocity': halos['CMVelocity'], 'Mass': attrs['particle_mass'] * halos['Length']})
-    mem_monitor()
+        start = MPI.Wtime()
+        halos_file = BigFile(os.path.join(sim, f'halos-{aout}'), dataset='1/', mode='w', mpicomm=mpicomm)
+        halos_file.attrs = attrs
+        halos_file.write({'Position': halos['CMPosition'], 'Velocity': halos['CMVelocity'], 'Mass': attrs['particle_mass'] * halos['Length']})
+        mem_monitor()
 
-    # Collect the number of halos --> just to print the information
-    nbr_halos = mpicomm.reduce(halos['Length'].size, op=MPI.SUM, root=0)
-    mem_monitor()
-    logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
+        # Collect the number of halos --> just to print the information
+        nbr_halos = mpicomm.reduce(halos['Length'].size, op=MPI.SUM, root=0)
+        mem_monitor()
+        logger_info(logger, f"Save {nbr_halos} halos done in {MPI.Wtime() - start:2.2f} s.", rank)
 
-    start = MPI.Wtime()
-    mem_monitor()
-    CatalogFFTPower(data_positions1=halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos],
-                    edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
-                    boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
-                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
-    mem_monitor()
-    logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
+        start = MPI.Wtime()
+        mem_monitor()
+        CatalogFFTPower(data_positions1=halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos],
+                        edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0), nmesh=args.nmesh,
+                        boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
+                        position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
+        mem_monitor()
+        logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     if args.subsampling == 'True':
         start = MPI.Wtime()
@@ -200,7 +206,7 @@ if __name__ == '__main__':
 
         # compute power spectrum of subsampled particles:
         CatalogFFTPower(data_positions1=particles['Position'][kept], wrap=True,
-                        edges=np.geomspace(args.k_min, args.k_max, args.k_nbins), ells=(0), nmesh=args.nmesh,
+                        edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0), nmesh=args.nmesh,
                         boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
                         position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-subsamp-power-{aout}.npy'))
         mem_monitor()
