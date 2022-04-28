@@ -1,8 +1,10 @@
 FROM ubuntu:latest
 WORKDIR /opt
 
+# to avoid interaction during installation
+ENV DEBIAN_FRONTEND noninteractive
 
-# install gcc, python3, pip, wget, curl, git, gsl, slurm:
+# install gcc, python3, pip, wget, curl, git, gsl:
 RUN \
     apt-get update        && \
     apt-get install --yes  --no-install-recommends  \
@@ -25,12 +27,14 @@ RUN \
     wget https://www.mpich.org/static/downloads/$mpich/$mpich_prefix.tar.gz && \
     tar xvzf $mpich_prefix.tar.gz                                           && \
     cd $mpich_prefix                                                        && \
+    export FFLAGS="-w -fallow-argument-mismatch -O2"                        && \
     ./configure                                                             && \
     make -j 4                                                               && \
     make install                                                            && \
     make clean                                                              && \
     cd ..                                                                   && \
     rm -rf $mpich_prefix
+
 RUN /sbin/ldconfig
 RUN python -m pip install mpi4py
 
@@ -44,5 +48,5 @@ RUN python -m pip install git+https://github.com/cosmodesi/cosmoprimo#egg=cosmop
 RUN python -m pip install pfft-python pmesh bigfile kdcount
 
 # to reinstall fastpm-python increase the value of ARG
-ARG nn=1
+ARG nn=0
 RUN python -m pip install git+https://github.com/echaussidon/fastpm-python
