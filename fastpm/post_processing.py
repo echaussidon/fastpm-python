@@ -186,7 +186,7 @@ if __name__ == '__main__':
 
     if args.subsampling == 'True':
         start = MPI.Wtime()
-        logger_info(logger, 'Start subsampling with subsampling_nbr={args.subsampling_nbr}', rank)
+        logger_info(logger, f'Start subsampling with subsampling_nbr={args.subsampling_nbr}', rank)
 
         nbr_particles = mpicomm.allgather(particles.size)
         kept = np.arange(0, particles.size, args.subsampling_nbr) + int(np.sum(nbr_particles[:rank]) % args.subsampling_nbr)
