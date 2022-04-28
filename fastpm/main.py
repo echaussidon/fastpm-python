@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     # plot memory usage
     if rank == 0:
-        logger.info(f"fastpm-python took {MPI.Wtime() - start_ini:2.2f} s.")
-
         from .memory_monitor import plot_memory
         plot_memory(ns.config, prefix='fastpm-')
+
+        logger.info(f"fastpm-python took {MPI.Wtime() - start_ini:2.2f} s.")

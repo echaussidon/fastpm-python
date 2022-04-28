@@ -66,32 +66,36 @@ class MemoryMonitor(object):
 def plot_memory(path, prefix=''):
     import glob
     list_files = glob.glob(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_*.txt"))
+    nbr_files = len(list_files)
+    nbr_max_files = 1000 if nbr_files > 1000 else nbr_files
 
     tab = np.loadtxt(list_files[0])[:, :2].T
     t, mem = tab[0], tab[1]
-    for file in list_files[1:]:
-        tab = np.loadtxt(file)[:, :2].T
-        t = t + tab[0]
-        mem = mem + tab[1]
 
-    t = t / len(list_files)
-    mem_per_proc = mem / len(list_files)
+    if nbr_max_files > 1:
+        for file in list_files[1:nbr_max_files]:
+            tab = np.loadtxt(file)[:, :2].T
+            t = t + tab[0]
+            mem = mem + tab[1]
+
+    t = t / nbr_max_files
+    mem_per_proc = mem / nbr_max_files
 
     plt.figure(figsize=(10, 5))
     plt.subplot(121)
     plt.plot(t, mem / 1e3)
     plt.xlabel('t [s]')
     plt.ylabel('Global Memory [Gb]')
-    plt.title(f'Max Memory per proc = {np.max(mem_per_proc) / 1e3:2.1f} [Gb] (for nproc={len(list_files)}) ')
+    plt.title(f'Max Memory per proc = {np.max(mem_per_proc) / 1e3:2.1f} [Gb] (for nproc={nbr_files}) ')
 
     plt.subplot(122)
     tab = np.loadtxt(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_0.txt"))[:, :2].T
     t, mem = tab[0], tab[1]
     plt.plot(t, mem / 1e3, label='rank==0')
-
-    tab = np.loadtxt(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_1.txt"))[:, :2].T
-    t, mem = tab[0], tab[1]
-    plt.plot(t, mem / 1e3, label='rank==1')
+    if nbr_files > 1:
+        tab = np.loadtxt(os.path.join(path, "memory-monitor", f"{prefix}memory_monitor_rank_1.txt"))[:, :2].T
+        t, mem = tab[0], tab[1]
+        plt.plot(t, mem / 1e3, label='rank==1')
     plt.xlabel('t [s]')
     plt.ylabel('Memory [Gb]')
     plt.legend()
