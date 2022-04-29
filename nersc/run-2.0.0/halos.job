@@ -28,7 +28,7 @@ SECONDS=0
 echo
 echo "Start post-processing at aout: $2"
 echo
-srun -n $nproc shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_halos True --nmin 8 --min_mass_halos 2.25e12 --nmesh 2048 --k_max 1.5e0 --compute_power False -subsampling False
+srun -n $nproc shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_halos True --nmin 8 --min_mass_halos 2.25e12 --nmesh 2048 --k_max 1.5e0 --compute_power False --subsampling False
 
 echo
 if (( $SECONDS > 3600 )); then
