@@ -11,9 +11,11 @@ echo "fastpm: "$fastpm
 
 for aout in ${aout_list[@]};
 do
+    echo "Work at a="$aout
     halos=$(sbatch --job-name halos-$aout --parsable --dependency=afterok:$fastpm halos.job $sim_name $aout)
-    echo "halos: "$halos
+    echo "    * halos: "$halos
 
     subsample=$(sbatch --job-name subsampling-$aout --parsable --dependency=afterok:$halos subsample.job $sim_name $aout)
-    echo "subsample: "$subsample
+    echo "    * subsample: "$subsample
+    echo 
 done
