@@ -1,0 +1,44 @@
+Hello, I'm rank 0 / 11 runnning on nid02517
+INIT  0 [0 0 0]
+A (rank 1 --> rank 2)  0 [0 0 0]
+Hello, I'm rank 9 / 11 runnning on nid02518
+INIT  9 [0 0 0]
+A (rank 1 --> rank 2)  9 [0 0 0]
+B (rank 2 --> rank 0) 9 [0 0 0]
+Hello, I'm rank 2 / 11 runnning on nid02518
+INIT  2 [0 0 0]
+Hello, I'm rank 4 / 11 runnning on nid02518
+INIT  4 [0 0 0]
+A (rank 1 --> rank 2)  4 [0 0 0]
+B (rank 2 --> rank 0) 4 [0 0 0]
+Hello, I'm rank 3 / 11 runnning on nid02518
+INIT  3 [0 0 0]
+A (rank 1 --> rank 2)  3 [0 0 0]
+B (rank 2 --> rank 0) 3 [0 0 0]
+Hello, I'm rank 1 / 11 runnning on nid02518
+INIT  1 [0 0 0]
+A (rank 1 --> rank 2)  1 [0 0 0]
+A (rank 1 --> rank 2)  2 [1 2 3]
+B (rank 2 --> rank 0) 1 [0 0 0]
+B (rank 2 --> rank 0) 0 [1 2 3]
+B (rank 2 --> rank 0) 2 [1 2 3]
+Hello, I'm rank 7 / 11 runnning on nid02518
+INIT  7 [0 0 0]
+A (rank 1 --> rank 2)  7 [0 0 0]
+B (rank 2 --> rank 0) 7 [0 0 0]
+Hello, I'm rank 6 / 11 runnning on nid02518
+INIT  6 [0 0 0]
+A (rank 1 --> rank 2)  6 [0 0 0]
+B (rank 2 --> rank 0) 6 [0 0 0]
+Hello, I'm rank 8 / 11 runnning on nid02518
+INIT  8 [0 0 0]
+A (rank 1 --> rank 2)  8 [0 0 0]
+B (rank 2 --> rank 0) 8 [0 0 0]
+Hello, I'm rank 5 / 11 runnning on nid02518
+INIT  5 [0 0 0]
+A (rank 1 --> rank 2)  5 [0 0 0]
+B (rank 2 --> rank 0) 5 [0 0 0]
+Hello, I'm rank 10 / 11 runnning on nid02518
+INIT  10 [0 0 0]
+A (rank 1 --> rank 2)  10 [0 0 0]
+B (rank 2 --> rank 0) 10 [0 0 0]
