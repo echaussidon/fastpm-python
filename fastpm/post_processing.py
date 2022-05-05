@@ -208,7 +208,7 @@ if __name__ == '__main__':
         # compute power spectrum of subsampled particles:
         CatalogFFTPower(data_positions1=particles['Position'][kept], wrap=True,
                         edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0), nmesh=args.nmesh,
-                        boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
+                        boxsize=sub_particles.attrs['boxsize'][0], boxcenter=sub_particles.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
                         position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-subsamp-power-{aout}.npy'))
         mem_monitor()
         logger_info(logger, f"Subsampling (from {particles.csize:2.2e} to approx. {particles.csize / args.subsampling_nbr:2.2e}) done in {MPI.Wtime() - start:2.2f} s.", rank)
