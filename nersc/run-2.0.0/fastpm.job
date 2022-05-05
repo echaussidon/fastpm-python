@@ -17,7 +17,7 @@
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=4
+export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
 nproc=108800
 
 # Timer initialisation:
@@ -27,7 +27,8 @@ SECONDS=0
 echo
 echo "Start fastpm-python for sim_name:$1 with nproc:$nproc"
 echo
-srun -n $nproc shifter python -m fastpm.main /global/cscratch1/sd/edmondc/Mocks/$1
+srun -n $nproc --cpu-bind=cores shifter python -m fastpm.main /global/cscratch1/sd/edmondc/Mocks/$1
+echo
 
 if (( $SECONDS > 3600 )); then
     let "hours=SECONDS/3600"

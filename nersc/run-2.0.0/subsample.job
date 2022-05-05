@@ -17,7 +17,7 @@
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=4
+export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
 nproc=108800
 
 # Timer initialisation:
@@ -28,7 +28,7 @@ then
     echo
     echo "Start post-processing at aout: $2"
     echo
-    srun -n $nproc_proc shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_power True --compute_halos False --nmesh 2048 --k_max 1.5e0 --subsampling True --subsampling_nbr 102 --delet_original True
+    srun -n $nproc --cpu-bind=cores shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_power True --compute_halos False --nmesh 2048 --k_max 1.5e0 --subsampling True --subsampling_nbr 102 --delet_original True
     echo
 else
     echo

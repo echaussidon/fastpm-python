@@ -17,10 +17,16 @@
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=8
-nproc=38400
+export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
+nproc=108733 #(Nodes -1) + 1
 
-min_mass_halos=2.25e12
+# Initialize SLURM_HOSTFILE and built it for --distribution=arbitrary option in srun
+export SLURM_HOSTFILE=hostfile_$SLURM_JOB_ID.txt
+end=1 # rank 0 isolated in node 0
+for node in `scontrol show hostname $SLURM_NODELIST`; do
+    for ((i=1; i<=$end; i++)); do echo $node >> $SLURM_HOSTFILE; done
+    end=68 # 68 ranks per nodes
+done
 
 # Timer initialisation:
 SECONDS=0
@@ -28,9 +34,9 @@ SECONDS=0
 echo
 echo "Start post-processing at aout: $2"
 echo
-srun -n $nproc shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_halos True --nmin 8 --min_mass_halos 2.25e12 --nmesh 2048 --k_max 1.5e0 --compute_power False --subsampling False
-
+srun -n $nproc --distribution=arbitrary --cpu-bind=cores shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_halos True --nmin 8 --min_mass_halos 2.25e12 --nmesh 2048 --k_max 1.5e0 --compute_power False --subsampling False
 echo
+
 if (( $SECONDS > 3600 )); then
     let "hours=SECONDS/3600"
     let "minutes=(SECONDS%3600)/60"
