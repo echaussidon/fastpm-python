@@ -48,5 +48,6 @@ RUN python -m pip install git+https://github.com/cosmodesi/cosmoprimo#egg=cosmop
 RUN python -m pip install pfft-python pmesh bigfile kdcount
 
 # to reinstall fastpm-python increase the value of ARG
-ARG nn=0
+ARG nn=2
+ARG b=1
 RUN python -m pip install git+https://github.com/echaussidon/fastpm-python
