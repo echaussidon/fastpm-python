@@ -17,6 +17,7 @@ module load python
 
 srun --mpi=pmi2 --resv-ports=0 --het-group=0,1 python test.py
 
+
 ## Test with map-cpu
 
 #

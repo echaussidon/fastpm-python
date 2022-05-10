@@ -24,6 +24,8 @@ On a un gros probleme ... on ne sait pas communiquer entre les deux composantes 
 
 **ATTENTION:** Ca ne marche pas !! (je ne sais pas completement pourquoi ..) Je ne peux pas communiquer entre deux composantes à cause de la version de MPI .. c'est vraiment très dérangeant ..
 
+**REMARQUE:** SI CA MARCHE !! il ne faut pas faire `srun -het-job O,1 python test.py` mais il faut faire `srun python test.py : python test.py` (pouruqoi je ne sais pas mais ok)
+
 **SOLUTION (NON ...):** Pas optimal (mais ca permet de passer outre sans réécrire du code pas propre) --> on va mapper directement les process pour chaque rank --> --cpu-bind=map-cu https://docs.lumi-supercomputer.eu/computing/jobs/distribution-binding/ + https://docs.nersc.gov/jobs/affinity/ pour l'architecture de CORI --> JE NE SAIS PAS SI JE PEUX FAIRE UNE COMBINAISON différente pourchaque node ...
 
 **IDEA QUI MARCHE ?:** https://www.intel.com/content/www/us/en/developer/articles/technical/controlling-process-placement-with-the-intel-mpi-library.html et http://manpages.ubuntu.com/manpages/bionic/man1/srun.1.html--> Il y a l'option dans srun --distribution:arbitrary pour utiliser **C'EST CE QUI MARCHE** (Edmond 1 -- NERSC staff 0)
