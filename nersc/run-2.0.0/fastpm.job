@@ -2,9 +2,9 @@
 
 #SBATCH --image=edmondchau/fastpm-python:latest
 #SBATCH --nodes=1600
-#SBATCH --qos=regular
 #SBATCH --time=03:30:00
 #SBATCH --constraint=knl
+#SBATCH --qos=regular
 #SBTACH --account=desi
 
 #SBATCH --mail-type=ALL
@@ -13,21 +13,26 @@
 #SBATCH --job-name=fastpm
 #SBATCH --output="%x-%j.out"
 
+# Timer initialisation:
+SECONDS=0
+
 # Problem with shifter at NERSC, it does not clear the PYTHONPATH... (exactly what we do not want to do...)
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
+# OpenMP not use --> set it just in case --> use --cpu-bind=cores -c $OMP_NUM_THREADS
+export OMP_NUM_THREADS=4
 nproc=108800
 
-# Timer initialisation:
-SECONDS=0
+# Set directory where the simulations are.
+DIR=/global/cscratch1/sd/edmondc/Mocks
 
 # Run fastpm with congig.py parameters:
 echo
 echo "Start fastpm-python for sim_name:$1 with nproc:$nproc"
 echo
-srun -n $nproc --cpu-bind=cores shifter python -m fastpm.main /global/cscratch1/sd/edmondc/Mocks/$1
+srun -n $nproc -c $OMP_NUM_THREADS --cpu-bind=cores shifter \
+     python -m fastpm.main $DIR/$1
 echo
 
 if (( $SECONDS > 3600 )); then

@@ -12,4 +12,4 @@ boxsize = 4 * 1380
 use_non_gaussianity = False
 fnl = 0
 
-power_kedges = arange(1e-3, 3e0, 1e-3)
+power_kedges = arange(1e-3, 1.5e0, 1e-3)

@@ -2,9 +2,9 @@
 
 #SBATCH --image=edmondchau/fastpm-python:latest
 #SBATCH --nodes=1600
-#SBATCH --qos=regular
-#SBATCH --time=00:30:00
+#SBATCH --time=00:10:00
 #SBATCH --constraint=knl
+#SBATCH --qos=regular
 #SBTACH --account=desi
 
 #SBATCH --mail-type=ALL
@@ -13,27 +13,35 @@
 #SBATCH --job-name=subsampling
 #SBATCH --output="%x-%j.out"
 
+# Timer initialisation:
+SECONDS=0
+
 # Problem with shifter at NERSC, it does not clear the PYTHONPATH... (exactly what we do not want to do...)
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
+# OpenMP not use --> set it just in case --> use --cpu-bind=cores -c $OMP_NUM_THREADS
+export OMP_NUM_THREADS=4
 nproc=108800
 
-# Timer initialisation:
-SECONDS=0
+# Set directory where the simulations are.
+DIR=/global/cscratch1/sd/edmondc/Mocks
 
-if [ -e /global/cscratch1/sd/edmondc/Mocks/$1/halos-$2 ]
+if [ -e $DIR/$1/halos-$2 ]
 then
     echo
     echo "Start post-processing at aout: $2"
     echo
-    srun -n $nproc --cpu-bind=cores shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_power True --compute_halos False --nmesh 2048 --k_max 1.5e0 --subsampling True --subsampling_nbr 102 --delet_original True
+    srun -n $nproc -c $OMP_NUM_THREADS --cpu-bind=cores shifter \
+         python -m fastpm.post_processing --sim $1 --aout $2 \
+                                          --compute_power True --subsampling True --compute_halos False \
+                                          --nmesh 2048 --k_min 1e-3 --k_max 1.5e0 --kbin 1e-3 \
+                                          --subsampling_nbr 102 --delet_original True
     echo
 else
     echo
     echo "Halos file does not exist --> we do not subsample the simulation"
-    echo /global/cscratch1/sd/edmondc/Mocks/$1/halos-$2
+    echo $DIR/$1/halos-$2
     echo
 fi
 

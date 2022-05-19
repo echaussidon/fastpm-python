@@ -2,9 +2,9 @@
 
 #SBATCH --image=edmondchau/fastpm-python:latest
 #SBATCH --nodes=1600
-#SBATCH --qos=regular
 #SBATCH --time=01:00:00
 #SBATCH --constraint=knl
+#SBATCH --qos=regular
 #SBTACH --account=desi
 
 #SBATCH --mail-type=ALL
@@ -13,29 +13,36 @@
 #SBATCH --job-name=halos
 #SBATCH --output="%x-%j.out"
 
+# Timer initialisation:
+SECONDS=0
+
 # Problem with shifter at NERSC, it does not clear the PYTHONPATH... (exactly what we do not want to do...)
 export PYTHONPATH=''
 
 # Parameters (knl = 68 physical core per Nodes with 4 threads per physical core):
-export OMP_NUM_THREADS=4 # OpenMP not use --> set it just in case --> use --cpu-bind=cores
-nproc=108733 #(Nodes -1) + 1
+# OpenMP not use --> set it just in case --> use --cpu-bind=cores -c $OMP_NUM_THREADS
+# For the moment fof works with 4 processes per nodes ...
+export OMP_NUM_THREADS=8
+nproc=6397 #(Nodes - 1) * 4 + 1
 
 # Initialize SLURM_HOSTFILE and built it for --distribution=arbitrary option in srun
 export SLURM_HOSTFILE=hostfile_$SLURM_JOB_ID.txt
 end=1 # rank 0 isolated in node 0
 for node in `scontrol show hostname $SLURM_NODELIST`; do
     for ((i=1; i<=$end; i++)); do echo $node >> $SLURM_HOSTFILE; done
-    end=68 # 68 ranks per nodes
+    end=4 # ranks per nodes
 done
-
-# Timer initialisation:
-SECONDS=0
 
 echo
 echo "Start post-processing at aout: $2"
 echo
-srun -n $nproc --distribution=arbitrary --cpu-bind=cores shifter python -m fastpm.post_processing --sim $1 --aout $2 --compute_halos True --nmin 8 --min_mass_halos 2.25e12 --nmesh 2048 --k_max 1.5e0 --compute_power False --subsampling False
-echo
+srun -n $nproc -c $OMP_NUM_THREADS --distribution=arbitrary --cpu-bind=cores shifter \
+     python -m fastpm.post_processing --sim $1 --aout $2 \
+                                      --compute_halos True --compute_power False --subsampling False \
+                                      --nmin 8 --min_mass_halos 2.25e12 \
+                                      --nmesh 2048 --k_min 1e-3 --k_max 1.5e0 --kbin 1e-3
+# remove $SLURM_HOSTFILE
+rm $SLURM_HOSTFILE
 
 if (( $SECONDS > 3600 )); then
     let "hours=SECONDS/3600"
