@@ -42,6 +42,9 @@ def collect_argparser():
     parser.add_argument("--aout", type=str, required=False, default='1.0000',
                         help="scale factor at which the halos are saved (e.g) '0.3300' or '1.0000'")
 
+    parser.add_argument("--min_mass_halos", type=float, required=False, default=2.25e12,
+                        help="minimal mass of the halos kept during the halos power spectrum computation")
+
     parser.add_argument("--nmesh", type=int, required=False, default=1024,
                         help="nmesh used for the power spectrum computation")
     parser.add_argument("--k_min", type=float, required=False, default=1e-3,
@@ -71,12 +74,12 @@ if __name__ == '__main__':
 
     args = collect_argparser()
     sim = os.path.join(args.path_to_sim, args.sim)
-    aout = args.aout
 
     start = MPI.Wtime()
-    halos = BigFile(os.path.join(sim, f'halos-{aout}'), dataset='1/', mode='r', mpicomm=mpicomm)
+    halos = BigFile(os.path.join(sim, f'halos-{args.aout}'), dataset='1/', mode='r', mpicomm=mpicomm)
     halos.Position = halos.read('Position')
     halos.Velocity = halos.read('Velocity')
+    halos.Mass = halos.read('Mass')
     logger_info(logger, f"Number of halos: {halos.csize} read in {MPI.Wtime() - start:2.2f} s.", rank)
 
     start = MPI.Wtime()
@@ -85,7 +88,7 @@ if __name__ == '__main__':
     # the RSD normalization factor
     # Warning: H(z) = 100 * h * E(z) in km.s^-1.Mpc^-1
     cosmo = load_fiducial_cosmo()
-    rsd_factor = 1 / (args.aout * 100 * cosmo.get_background().efunc(1 / float(args.aout) - 1))
+    rsd_factor = 1 / (float(args.aout) * 100 * cosmo.get_background().efunc(1 / float(args.aout) - 1))
     # compute position in redshift space
     position_rsd = halos['Position'] + rsd_factor * halos['Velocity'] * line_of_sight
     logger_info(logger, f"Compute positions in redshift space in {MPI.Wtime() - start:2.2f} s.", rank)
@@ -99,10 +102,10 @@ if __name__ == '__main__':
     # need to use wrap = True since some halos are outside the box
     # due to pmesh auto wrapping.
     # no need to select rank == 0 it is automatic in .save method
-    CatalogFFTPower(data_positions1=halos['Position'], wrap=True,
+    CatalogFFTPower(data_positions1=position_rsd[halos['Mass'] >= args.min_mass_halos], wrap=True,
                     edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0, 2, 4), nmesh=args.nmesh,
                     boxsize=halos.attrs['boxsize'][0], boxcenter=halos.attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los=line_of_sight,
-                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'particle-power-{aout}-rsd.npy'))
+                    position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{args.aout}-rsd.npy'))
     logger_info(logger, f'CatalogFFTPower with halos for ell=(0, 2, 4) done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     # wait every one (no need since rank 0 will be the last one and we write on rank 0)
