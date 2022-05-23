@@ -134,7 +134,7 @@ if __name__ == '__main__':
     sim = os.path.join(args.path_to_sim, args.sim)
     aout = args.aout
 
-    mem_monitor_prefix = 'halos' if args.compute_halos else 'subsampling'
+    mem_monitor_prefix = 'halos' if (args.compute_halos == 'True') else 'subsampling'
     mem_monitor = MemoryMonitor(log_file=os.path.join(sim, 'memory-monitor', f'{mem_monitor_prefix}-{aout}-memory_monitor_rank_{rank}.txt'))
     mem_monitor()
 
