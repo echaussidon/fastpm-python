@@ -16,6 +16,7 @@ doc/_build/
 **/bak
 *.DS_Store
 examples/run/*
+**/*.out
 
 dvpt/reduce_memory_fof_catalog/memory-monitor
 dvpt/reduce_memory_fof_catalog/*.npy
