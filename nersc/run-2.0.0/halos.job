@@ -2,7 +2,7 @@
 
 #SBATCH --image=edmondchau/fastpm-python:latest
 #SBATCH --nodes=1600
-#SBATCH --time=01:00:00
+#SBATCH --time=01:30:00
 #SBATCH --constraint=knl
 #SBATCH --qos=regular
 #SBTACH --account=desi
@@ -34,7 +34,7 @@ for node in `scontrol show hostname $SLURM_NODELIST`; do
 done
 
 echo
-echo "Start post-processing at aout: $2"
+echo "Start halos processing at aout: $2"
 echo
 srun -n $nproc -c $OMP_NUM_THREADS --distribution=arbitrary --cpu-bind=cores shifter \
      python -m fastpm.post_processing --sim $1 --aout $2 \
