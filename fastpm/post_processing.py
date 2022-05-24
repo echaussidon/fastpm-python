@@ -184,12 +184,32 @@ if __name__ == '__main__':
 
         start = MPI.Wtime()
         mem_monitor()
-        CatalogFFTPower(data_positions1=halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos],
+        CatalogFFTPower(data_positions1=halos['CMPosition'][(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos], wrap=True,
                         edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0), nmesh=args.nmesh,
                         boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los='x',
                         position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{aout}.npy'))
         mem_monitor()
         logger_info(logger, f'CatalogFFTPower with halos done in {MPI.Wtime() - start:2.2f} s.', rank)
+
+        # Add RSD and compute power spectrum for monopole / quadrupole / hexadecapole
+        start = MPI.Wtime()
+        # Apply RSD along the z axis (unitary vector)
+        line_of_sight = [0, 0, 1]
+        # RSD normalization factor (Warning: H(z) = 100 * h * E(z) in km.s^-1.Mpc^-1)
+        rsd_factor = 1 / (float(aout) * 100 * cosmo.get_background().efunc(1 / float(aout) - 1))
+        position_rsd = halos['CMPosition'] + rsd_factor * halos['CMVelocity'] * line_of_sight
+        halos_file.write({'Position_rsd': position_rsd})
+        mem_monitor()
+        logger_info(logger, f"Compute positions in redshift space and write it in {MPI.Wtime() - start:2.2f} s.", rank)
+
+        start = MPI.Wtime()
+        mem_monitor()
+        CatalogFFTPower(data_positions1=position_rsd[(halos['Length'] * attrs['particle_mass']) >= args.min_mass_halos], wrap=True,
+                        edges=np.arange(args.k_min, args.k_max, args.kbin), ells=(0, 2, 4), nmesh=args.nmesh,
+                        boxsize=attrs['boxsize'][0], boxcenter=attrs['boxsize'][0] // 2, resampler='tsc', interlacing=2, los=line_of_sight,
+                        position_type='pos', mpicomm=mpicomm).poles.save(os.path.join(sim, f'halos-power-{aout}-rsd.npy'))
+        mem_monitor()
+        logger_info(logger, f'CatalogFFTPower with halos for ell=(0, 2, 4) done in {MPI.Wtime() - start:2.2f} s.', rank)
 
     if args.subsampling == 'True':
         start = MPI.Wtime()
