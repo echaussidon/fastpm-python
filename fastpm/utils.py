@@ -27,6 +27,8 @@ def split_size_3d(s):
     Split `s` into three integers, a, b, c, such
     that a * b * c == s and a <= b <= c
 
+    Note: a <= b <= c is not always true, we can sometime get 3, 1, X
+
     Parameters
     -----------
     s : int
@@ -51,6 +53,31 @@ def split_size_3d(s):
         b = b - 1
     c = s
     return a, b, c
+
+
+def split_size_2d(s):
+    """
+    Split `s` into two integers, a, b such
+    that a * b == s and a <= b
+
+    Parameters
+    -----------
+    s : int
+        integer to split
+
+    Returns
+    -------
+    a, b: int
+        integers such that a * b == s and a <= b
+    """
+    a = int(s ** 0.5) + 1
+    while a > 1:
+        if s % a == 0:
+            s = s // a
+            break
+        a = a - 1
+    b = s
+    return a, b
 
 
 def GatherArray(data, comm, root=0):
