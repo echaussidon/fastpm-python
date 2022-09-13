@@ -1,0 +1,43 @@
+#!/bin/bash
+# sbatch launch.sh
+
+#SBATCH --nodes=1
+#SBATCH --qos=debug
+#SBATCH --time=00:30:00
+#SBATCH --constraint=haswell
+#SBTACH --account=desi
+
+#SBATCH --job-name=survey
+#SBATCH --output="%x-%j.out"
+
+# Timer initialisation:
+SECONDS=0
+
+nproc=64
+export OMP_NUM_THREADS=1
+
+# Parameters:
+sim_name='run-knl-3-fnl-0'
+randoms_name='run-knl-3-randoms'
+aout="0.3333"
+
+release='Y5'
+
+echo
+srun -n 1 -c $nproc \
+     python -m imaging_systematics --sim $1 --aout $2 --release $3 --regions 'SNGC' --name_randoms $4
+
+echo
+if (( $SECONDS > 3600 )); then
+    let "hours=SECONDS/3600"
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $hours hour(s), $minutes minute(s) and $seconds second(s)"
+elif (( $SECONDS > 60 )); then
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $minutes minute(s) and $seconds second(s)"
+else
+    echo "Completed in $SECONDS seconds"
+fi
+echo
