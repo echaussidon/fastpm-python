@@ -37,6 +37,10 @@ def collect_argparser():
     parser.add_argument("--name_randoms", type=str, required=False, default='fastpm-randoms',
                         help='Each region is be saved in one dataset.')
 
+    parser.add_argument("--compute_ini", type=str, required=False, default='True')
+    parser.add_argument("--compute_cont", type=str, required=False, default='True')
+    parser.add_argument("--compute_corr", type=str, required=False, default='True')
+
     return parser.parse_args()
 
 
@@ -80,32 +84,35 @@ if __name__ == '__main__':
 
         for num in range(np.max(cutsky['NMOCK'])):
             sel = cutsky['NMOCK'] == num
-
             # Compute the power spectrum
             # To fix the size of the box, we take the same number than those for the Ezmocks 6pc computation
-            start = MPI.Wtime()
-            CatalogFFTPower(data_positions1=[cutsky['RA'][sel], cutsky['DEC'][sel], cutsky['DISTANCE'][sel]],
-                            randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
-                            position_type='rdd',
-                            edges=kedges, ells=(0), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
-                            resampler='tsc', interlacing=3, los='firstpoint',
-                            mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}.npy'))
-            logger_info(logger, f'CatalogFFTPower done with uncont in {MPI.Wtime() - start:2.2f} s.', rank)
 
-            start = MPI.Wtime()
-            CatalogFFTPower(data_positions1=[cutsky['RA'][sel & is_wsys_cont], cutsky['DEC'][sel & is_wsys_cont], cutsky['DISTANCE'][sel & is_wsys_cont]],
-                            randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
-                            position_type='rdd',
-                            edges=kedges, ells=(0), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
-                            resampler='tsc', interlacing=3, los='firstpoint',
-                            mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}-cont.npy'))
-            logger_info(logger, f'CatalogFFTPower done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
+            if args.compute_ini == 'True':
+                start = MPI.Wtime()
+                CatalogFFTPower(data_positions1=[cutsky['RA'][sel], cutsky['DEC'][sel], cutsky['DISTANCE'][sel]],
+                                randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
+                                position_type='rdd',
+                                edges=kedges, ells=(0, 2, 4), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
+                                resampler='tsc', interlacing=3, los='firstpoint',
+                                mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}.npy'))
+                logger_info(logger, f'CatalogFFTPower done with uncont in {MPI.Wtime() - start:2.2f} s.', rank)
 
-            start = MPI.Wtime()
-            CatalogFFTPower(data_positions1=[cutsky['RA'][sel & is_wsys_cont], cutsky['DEC'][sel & is_wsys_cont], cutsky['DISTANCE'][sel & is_wsys_cont]], data_weights1=cutsky['WSYS'][sel & is_wsys_cont],
-                            randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
-                            position_type='rdd',
-                            edges=kedges, ells=(0), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
-                            resampler='tsc', interlacing=3, los='firstpoint',
-                            mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}-corr.npy'))
-            logger_info(logger, f'CatalogFFTPower done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
+            if args.compute_cont == 'True':
+                start = MPI.Wtime()
+                CatalogFFTPower(data_positions1=[cutsky['RA'][sel & is_wsys_cont], cutsky['DEC'][sel & is_wsys_cont], cutsky['DISTANCE'][sel & is_wsys_cont]],
+                                randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
+                                position_type='rdd',
+                                edges=kedges, ells=(0, 2, 4), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
+                                resampler='tsc', interlacing=3, los='firstpoint',
+                                mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}-cont.npy'))
+                logger_info(logger, f'CatalogFFTPower done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
+
+            if args.compute_corr == 'True':
+                start = MPI.Wtime()
+                CatalogFFTPower(data_positions1=[cutsky['RA'][sel & is_wsys_cont], cutsky['DEC'][sel & is_wsys_cont], cutsky['DISTANCE'][sel & is_wsys_cont]], data_weights1=cutsky['WSYS'][sel & is_wsys_cont],
+                                randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
+                                position_type='rdd',
+                                edges=kedges, ells=(0, 2, 4), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],
+                                resampler='tsc', interlacing=3, los='firstpoint',
+                                mpicomm=mpicomm).poles.save(os.path.join(sim, f'power-spectrum/desi-cutsky-{args.release}-{region}-{num}-corr.npy'))
+                logger_info(logger, f'CatalogFFTPower done with cont in {MPI.Wtime() - start:2.2f} s.', rank)

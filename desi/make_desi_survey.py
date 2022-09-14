@@ -181,7 +181,7 @@ if __name__ == '__main__':
 
             # Generate randoms with in the cutsky
             start = MPI.Wtime()
-            randoms = RandomCutskyCatalog(rarange=add_ra + np.array(rarange), decrange=add_dec + np.array(decrange), size=nbr_randoms, seed=seeds_randoms[region], mpicomm=mpicomm)
+            randoms = RandomCutskyCatalog(rarange=add_ra + np.array(rarange), decrange=add_dec + np.array(decrange), csize=nbr_randoms, seed=seeds_randoms[region], mpicomm=mpicomm)
             logger_info(logger, f"RandomCutsky done in {MPI.Wtime() - start:2.2f} s.", rank)
 
             # match the desi footprint and apply the DR9 mask

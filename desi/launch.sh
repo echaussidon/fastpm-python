@@ -1,5 +1,12 @@
 #!/bin/bash
-# ./launch.sh
+
+
+# Script to launch:
+# ./launch.sh 'True' 'False'
+# ./launch.sh 'False' 'True'
+fnl_0=$1
+fnl_25=$2
+
 
 # Parameters for fnl = 0:
 sim_name='run-knl-3-fnl-0'
@@ -10,47 +17,67 @@ name_randoms='run-knl-3-randoms'
 seed_data='9'
 seed_randoms='18'
 
+if [[ $fnl_0 == 'True' ]]; then
+    for aout in ${aout_list[@]}; do
+        echo "Work at a="$aout
 
-# for aout in ${aout_list[@]};
-# do
-#     echo "Work at a="$aout
-#
-#     make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
-#                       make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
-#     echo "    * make_desi_survey: "$make_desi_survey
-#
-#     imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
-#                           --dependency=afterok:$make_desi_survey\
-#                           imaging_systematics.job $sim_name $aout $release $name_randoms)
-#     echo "    * imaging_systematics: "$imaging_systematics
-#
-#     power_spectrum=$(sbatch --job-name power_spectrum-$aout --parsable\
-#                      --dependency=afterok:$imaging_systematics\
-#                      power_spectrum.job $sim_name $aout $release $name_randoms)
-#     echo "    * power_spectrum: "$power_spectrum
-# done
+        make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
+                          make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
+        echo "    * make_desi_survey: "$make_desi_survey
 
+        imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
+                              --dependency=afterok:$make_desi_survey\
+                              imaging_systematics.job $sim_name $aout $release $name_randoms)
+        echo "    * imaging_systematics: "$imaging_systematics
+
+        power_spectrum=$(sbatch --job-name power_spectrum-ini-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'True' 'False' 'False')
+        echo "    * power_spectrum: "$power_spectrum
+
+        power_spectrum=$(sbatch --job-name power_spectrum-cont-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'True' 'False')
+        echo "    * power_spectrum: "$power_spectrum
+
+        power_spectrum=$(sbatch --job-name power_spectrum-corr-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'False' 'True')
+        echo "    * power_spectrum: "$power_spectrum
+    done
+fi
 
 # Parameters for fnl = 25:
 sim_name='run-knl-3-fnl-25'
 generate_randoms='False'
 seed_data='123'
 
-for aout in ${aout_list[@]};
-do
-    echo "Work at a="$aout
+if [[ $fnl_25 == 'True' ]]; then
+    for aout in ${aout_list[@]}; do
+        echo "Work at a="$aout
 
-    make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
-                       make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
-    echo "    * make_desi_survey: "$make_desi_survey
+        make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
+                           make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
+        echo "    * make_desi_survey: "$make_desi_survey
 
-    imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
-                          --dependency=afterok:$make_desi_survey\
-                          imaging_systematics.job $sim_name $aout $release $name_randoms)
-    echo "    * imaging_systematics: "$imaging_systematics
+        imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
+                              --dependency=afterok:$make_desi_survey\
+                              imaging_systematics.job $sim_name $aout $release $name_randoms)
+        echo "    * imaging_systematics: "$imaging_systematics
 
-    power_spectrum=$(sbatch --job-name power_spectrum-$aout --parsable\
-                     --dependency=afterok:$imaging_systematics\
-                     power_spectrum.job $sim_name $aout $release $name_randoms)
-    echo "    * power_spectrum: "$power_spectrum
-done
+        power_spectrum=$(sbatch --job-name power_spectrum-ini-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'True' 'False' 'False')
+        echo "    * power_spectrum: "$power_spectrum
+
+        power_spectrum=$(sbatch --job-name power_spectrum-cont-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'True' 'False')
+        echo "    * power_spectrum: "$power_spectrum
+
+        power_spectrum=$(sbatch --job-name power_spectrum-corr-$aout --parsable\
+                         --dependency=afterok:$imaging_systematics\
+                         power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'False' 'True')
+        echo "    * power_spectrum: "$power_spectrum
+    done
+fi

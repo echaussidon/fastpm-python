@@ -19,7 +19,7 @@ export OMP_NUM_THREADS=1
 
 
 srun -n $nproc -c $OMP_NUM_THREADS \
-       python -m power_spectrum --sim $1 --aout $2 --release $3 --regions 'SNGC' --name_randoms $4
+       python -m power_spectrum --sim $1 --aout $2 --release $3 --regions 'SNGC' --name_randoms $4 --compute_ini $5 --compute_cont $6 --compute_corr $7
 
 
 if (( $SECONDS > 3600 )); then
