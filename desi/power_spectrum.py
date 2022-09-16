@@ -79,7 +79,7 @@ if __name__ == '__main__':
         start = MPI.Wtime()
         cutsky = BigFile(os.path.join(sim, f'desi-cutsky-{args.aout}'), dataset=f'{args.release}-{region}/', mode='r', mpicomm=mpicomm)
         cutsky.RA, cutsky.DEC, cutsky.DISTANCE = cutsky.read('RA'), cutsky.read('DEC'), distance(cutsky.read('Z'))
-        cutsky.NMOCK, cutsky.WSYS, is_wsys_cont = cutsky.read('NMOCK'), cutsky.read('WSYS'), cutsky.read('IS_WSYS_CONT')
+        cutsky.NMOCK, cutsky.WSYS, is_for_uncont, is_wsys_cont = cutsky.read('NMOCK'), cutsky.read('WSYS'), cutsky.read('IS_FOR_UNCONT'), cutsky.read('IS_WSYS_CONT')
         logger_info(logger, f"Number of galaxies: {cutsky.csize} read in {MPI.Wtime() - start:2.2f} s.", rank)
 
         for num in range(np.max(cutsky['NMOCK'])):
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
             if args.compute_ini == 'True':
                 start = MPI.Wtime()
-                CatalogFFTPower(data_positions1=[cutsky['RA'][sel], cutsky['DEC'][sel], cutsky['DISTANCE'][sel]],
+                CatalogFFTPower(data_positions1=[cutsky['RA'][sel & is_for_uncont], cutsky['DEC'][sel & is_for_uncont], cutsky['DISTANCE'][sel & is_for_uncont]],
                                 randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']],
                                 position_type='rdd',
                                 edges=kedges, ells=(0, 2, 4), cellsize=[6, 6, 6], boxsize=[8000, 16000, 8000],

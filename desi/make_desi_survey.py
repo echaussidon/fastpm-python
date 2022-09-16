@@ -49,7 +49,9 @@ def collect_argparser():
     parser.add_argument("--maskbits", nargs='+', type=int, required=False, default=[1, 8, 9, 11, 12, 13],
                         help="DR9 maskbits used to cut the data and the randoms, default=[1, 8, 9, 11, 12, 13]")
 
-    parser.add_argument("--expected_density", type=float, required=False, default=280,
+    parser.add_argument("--expected_density", type=float, required=False, default=200,
+                        help='Expected mock density in deg^-2 to match the real data. ~ 200 for QSO.')
+    parser.add_argument("--expected_density_for_cont", type=float, required=False, default=280,
                         help='Expected mock density in deg^-2 before systematic contamination. Typically, 1.4*n_obs is enough.')
 
     parser.add_argument("--generate_randoms", type=str, required=False, default='False',
@@ -75,7 +77,7 @@ if __name__ == '__main__':
         match_photo_desi_footprint
 
     from utils import logger_info, load_fiducial_cosmo, z_to_chi, chi_to_z, \
-        apply_hod, split_the_mock
+        apply_hod, split_the_mock, extract_expected_density
 
     setup_logging()
 
@@ -143,27 +145,36 @@ if __name__ == '__main__':
         # match the desi footprint and apply the DR9 mask:
         start = MPI.Wtime()
         desi_cutsky = match_photo_desi_footprint(cutsky, region, args.release, args.program, npasses=args.npasses, rank=rank)
+        logger_info(logger, f"Match region: {region} and release footprint: {args.release}-{args.program}-{args.npasses} done in {MPI.Wtime() - start:2.2f} s.", rank)
+
+        # split the mock into subsamples and add flags for imaging systematics
+        # WARNING: split_the_mocks works with healpix to estimate the density without any fracarea.
+        # DO NOT Apply maskbits before !
+        start = MPI.Wtime()
+        desi_cutsky['NMOCK'], nmocks = split_the_mock(desi_cutsky['HPX'], mpicomm, expected_density=args.expected_density_for_cont, seed=seeds_data[region] * 3)
+        # add flag to have correct density in uncontaminated mocks
+        desi_cutsky['IS_FOR_UNCONT'] = np.zeros(desi_cutsky.size, dtype='bool')
+        for i in range(nmocks):
+            sel = desi_cutsky['NMOCK'] == i
+            desi_cutsky['IS_FOR_UNCONT'][sel] = extract_expected_density(desi_cutsky['HPX'][sel], mpicomm, expected_density=args.expected_density, seed=seeds_data[region] + 12)
+        logger_info(logger, f"Split the simulation in {MPI.Wtime() - start:2.2f} s.", rank)
+
         # add DR9 maskbits
         add_brick_quantities = {'maskbits': {'fn': '/global/cfs/cdirs/cosmo/data/legacysurvey/dr9/{region}/coadd/{brickname:.3s}/{brickname}/legacysurvey-{brickname}-maskbits.fits.fz', 'dtype': 'i2', 'default': 1}}
         desi_cutsky['MASKBITS'] = get_brick_pixel_quantities(desi_cutsky['RA'], desi_cutsky['DEC'], add_brick_quantities, mpicomm=mpicomm)['maskbits']
-        # keep only objects without maskbits
+        # Apply maskbits
         sel = np.ones(desi_cutsky.size, dtype=bool)
         for mskb in args.maskbits:
             sel &= (desi_cutsky['MASKBITS'] & 2**mskb) == 0
         desi_cutsky = desi_cutsky[sel]
-        logger_info(logger, f"Match region: {region} and release footprint: {args.release}-{args.program}-{args.npasses} + apply DR9 maskbits: {args.maskbits} done in {MPI.Wtime() - start:2.2f} s.", rank)
-
-        # split the mock into 'small mock' and add flags for imaging systematics
-        start = MPI.Wtime()
-        desi_cutsky['NMOCK'], nmocks = split_the_mock(desi_cutsky, mpicomm, expected_density=args.expected_density, seed=seeds_data[region] * 3)
-        logger_info(logger, f"Split the simulation in {MPI.Wtime() - start:2.2f} s.", rank)
+        logger_info(logger, f"Collect DR9 maskbits and apply: {args.maskbits} maskbits done in {MPI.Wtime() - start:2.2f} s.", rank)
 
         # save desi_cutsky into the same bigfile --> N / SNGC / SSGC
         start = MPI.Wtime()
         mock = BigFile(os.path.join(sim, f'desi-cutsky-{args.aout}'), dataset=args.release + '-' + region + '/', mode='w', mpicomm=mpicomm)
         mock.attrs = halos.attrs
         mock.write({'RA': desi_cutsky['RA'], 'DEC': desi_cutsky['DEC'], 'Z': desi_cutsky['Z'],
-                    'MASKBITS': desi_cutsky['MASKBITS'], 'NMOCK': desi_cutsky['NMOCK'],
+                    'MASKBITS': desi_cutsky['MASKBITS'], 'NMOCK': desi_cutsky['NMOCK'], 'IS_FOR_UNCONT': desi_cutsky['NMOCK'],
                     'DISTANCE': desi_cutsky['DISTANCE'], 'HPX': desi_cutsky['HPX']})
         logger_info(logger, f"Save done in {MPI.Wtime() - start:2.2f} s.\n", rank)
 

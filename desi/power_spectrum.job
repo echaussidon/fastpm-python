@@ -8,7 +8,7 @@
 #SBTACH --account=desi
 
 #SBATCH --job-name=power-spectrum
-#SBATCH --output="power_spectrum-%j.out"
+#SBATCH --output="%x-%j.out"
 
 # Timer initialisation:
 SECONDS=0

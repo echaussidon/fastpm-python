@@ -42,10 +42,13 @@ def collect_argparser():
     return parser.parse_args()
 
 
-def apply_imaging_systematics(cutsky, sel, nside=256, seed=946,
+def apply_imaging_systematics(cutsky, sel, fracarea, nside=256, seed=946,
                               wsys_path='/global/cfs/cdirs/desi/users/edmondc/sys_weight/photo/MAIN_QSO_imaging_weight_256.npy'):
     """ Warning: cannot be called with mpicomm.size > 1 !
-        cutsky.size == contain nmock subsamples. Need to return is_wsys_cont[sel] to return the flag only for the object from the sel subsample."""
+        cutsky.size == contain nmock subsamples. Need to return is_wsys_cont[sel] to return the flag only for the object from the sel subsample.
+
+        cutsky is alread full of masks .. --> need fracarea (from randoms to estimate) the mean density of the mocks !
+        """
 
     # Load photometric weight
     wsys = PhotoWeight.load(wsys_path)
@@ -64,7 +67,7 @@ def apply_imaging_systematics(cutsky, sel, nside=256, seed=946,
     logger.warning("ATTENTION ON FIXE A LA MAIN LA DENSITE car on a que le wsys des targets")
     wsys.mean_density_region = {region: 10.5 for region in wsys.regions}
 
-    _, is_wsys_cont, _ = create_flag_imaging_systematic(cutsky, sel, wsys, use_real_density=True, seed=seed)
+    _, is_wsys_cont, _ = create_flag_imaging_systematic(cutsky, sel, wsys, fracarea, use_real_density=True, seed=seed)
 
     # is_wsys_cont is size of cutsky.size --> return only is_wsys_cont[sel] to work with one sub-sample
     return is_wsys_cont[sel]
@@ -128,7 +131,8 @@ if __name__ == '__main__':
         randoms = BigFile(os.path.join(args.path_to_sim, args.name_randoms), dataset=f'{args.release}-{region}/', mode='r', mpicomm=mpicomm)
         randoms.RA, randoms.DEC, randoms.HPX = randoms.read('RA'), randoms.read('DEC'), randoms.read('HPX')
         # compute randoms healpix map to build fracarea
-        randoms_map = build_healpix_map(256, randoms['RA'], randoms['DEC'], precomputed_pix=randoms['HPX'], in_deg2=True)
+        nside = 256
+        randoms_map = build_healpix_map(nside, randoms['RA'], randoms['DEC'], precomputed_pix=randoms['HPX'], in_deg2=True)
         sel = randoms_map > 0
         randoms_density = np.mean(randoms_map[sel])
         fracarea = randoms_map / randoms_density
@@ -147,8 +151,8 @@ if __name__ == '__main__':
         is_wsys_cont, sys_weight = np.ones(cutsky.size, dtype='bool'), np.nan * np.ones(cutsky.size)
         for num in range(np.max(cutsky['NMOCK'])):
             sel = cutsky['NMOCK'] == num
-            is_wsys_cont[sel] = apply_imaging_systematics(cutsky, sel, seed=seeds[region] + num,
-                                                          wsys_path='/global/cfs/cdirs/desi/users/edmondc/sys_weight/photo/MAIN_QSO_imaging_weight_256.npy')
+            is_wsys_cont[sel] = apply_imaging_systematics(cutsky, sel, fracarea, seed=seeds[region] + num,
+                                                          wsys_path=f'/global/cfs/cdirs/desi/users/edmondc/sys_weight/photo/MAIN_QSO_imaging_weight_{nside}.npy')
 
             sys_weight[sel & is_wsys_cont] = compute_imaging_systematic_weights(cutsky, sel & is_wsys_cont, region, fracarea, nside=256, seed=(seeds[region] + 10) * num, n_jobs=64)
         cutsky.write({'IS_WSYS_CONT': is_wsys_cont, 'WSYS': sys_weight})

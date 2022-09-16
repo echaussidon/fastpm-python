@@ -90,18 +90,34 @@ def compute_sky_density(pixels, mpicomm, nside=256, in_deg2=True):
     return mean_sky_density
 
 
-def split_the_mock(cutsky, mpicomm, expected_density=300, nside=256, seed=5162):
+def split_the_mock(pixels, mpicomm, expected_density=300, nside=256, seed=5162):
     """ Extract several mocks of exepected density from the same realisation (supposed with density higher than expected density)
-        The estimation of the density is performed at nside=256. Ps: no need to apply DR9 mask ! :)"""
+        Ps: The estimation of the density is performed at nside=256. Dot not to apply DR9 mask ! :) (Otherwise need to use randoms :))
+    """
     import mpytools as mpy
 
-    mean_sky_density = compute_sky_density(cutsky['HPX'], mpicomm, nside=nside)
+    mean_sky_density = compute_sky_density(pixels, mpicomm, nside=nside)
 
     # nombre de mocks que l'on peut faire
     nmocks = int(mean_sky_density / expected_density)
     logger_info(logger, f'mean density = {mean_sky_density:2.2f} -- expected density = {expected_density} -- Nmocks available = {nmocks} -- mock density = {mean_sky_density / nmocks:2.2f}', mpicomm.rank)
 
     # random generator invariant under MPI scaling
-    rng = mpy.random.MPIRandomState(cutsky['HPX'].size, seed=seed)  # invariant under number of processes
+    rng = mpy.random.MPIRandomState(pixels.size, seed=seed)
 
     return rng.uniform(low=0, high=nmocks, dtype=int), nmocks
+
+
+def extract_expected_density(pixels, mpicomm, expected_density=200, nside=256, seed=5162):
+    """ Return mask to have cutsky with the expected sky density.
+        Ps: The estimation of the density is performed at nside=256. Dot not to apply DR9 mask ! :) (Otherwise need to use randoms :))
+    """
+    import mpytools as mpy
+
+    # compute the mean density
+    mean_sky_density = compute_sky_density(pixels, mpicomm, nside=nside)
+
+    # random generator invariant under MPI scaling
+    rng = mpy.random.MPIRandomState(pixels.size, seed=seed)
+
+    return rng.uniform(low=0, high=1, dtype='f8') <= expected_density / mean_sky_density

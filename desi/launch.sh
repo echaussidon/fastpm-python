@@ -21,26 +21,26 @@ if [[ $fnl_0 == 'True' ]]; then
     for aout in ${aout_list[@]}; do
         echo "Work at a="$aout
 
-        make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
+        make_desi_survey=$(sbatch --job-name make_desi_survey-fnl-0-$aout --parsable\
                           make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
         echo "    * make_desi_survey: "$make_desi_survey
 
-        imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
+        imaging_systematics=$(sbatch --job-name imaging_systematis-fnl-0-$aout --parsable\
                               --dependency=afterok:$make_desi_survey\
                               imaging_systematics.job $sim_name $aout $release $name_randoms)
         echo "    * imaging_systematics: "$imaging_systematics
 
-        power_spectrum=$(sbatch --job-name power_spectrum-ini-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-ini-fnl-0-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'True' 'False' 'False')
         echo "    * power_spectrum: "$power_spectrum
 
-        power_spectrum=$(sbatch --job-name power_spectrum-cont-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-cont-fnl-0-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'True' 'False')
         echo "    * power_spectrum: "$power_spectrum
 
-        power_spectrum=$(sbatch --job-name power_spectrum-corr-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-corr-fnl-0-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'False' 'True')
         echo "    * power_spectrum: "$power_spectrum
@@ -56,26 +56,26 @@ if [[ $fnl_25 == 'True' ]]; then
     for aout in ${aout_list[@]}; do
         echo "Work at a="$aout
 
-        make_desi_survey=$(sbatch --job-name make_desi_survey-$aout --parsable\
+        make_desi_survey=$(sbatch --job-name make_desi_survey-fnl-25-$aout --parsable\
                            make_desi_survey.job $sim_name $aout $release $generate_randoms $name_randoms $seed_data $seed_randoms)
         echo "    * make_desi_survey: "$make_desi_survey
 
-        imaging_systematics=$(sbatch --job-name imaging_systematis-$aout --parsable\
+        imaging_systematics=$(sbatch --job-name imaging_systematis-fnl-25-$aout --parsable\
                               --dependency=afterok:$make_desi_survey\
                               imaging_systematics.job $sim_name $aout $release $name_randoms)
         echo "    * imaging_systematics: "$imaging_systematics
 
-        power_spectrum=$(sbatch --job-name power_spectrum-ini-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-ini-fnl-25-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'True' 'False' 'False')
         echo "    * power_spectrum: "$power_spectrum
 
-        power_spectrum=$(sbatch --job-name power_spectrum-cont-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-cont-fnl-25-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'True' 'False')
         echo "    * power_spectrum: "$power_spectrum
 
-        power_spectrum=$(sbatch --job-name power_spectrum-corr-$aout --parsable\
+        power_spectrum=$(sbatch --job-name power_spectrum-corr-fnl-25-$aout --parsable\
                          --dependency=afterok:$imaging_systematics\
                          power_spectrum.job $sim_name $aout $release $name_randoms 'False' 'False' 'True')
         echo "    * power_spectrum: "$power_spectrum
