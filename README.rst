@@ -1,6 +1,11 @@
 Update
 ======
 
+Starting from the initail fastpm-python, I add initial condition with local PNG to create end-2-end pieline for fnl measurment in DESI. 
+
+I update fof code (problem with memory issue). Add several scripts to launch simulation on nersc and scripts to create DESI cutsky with imaging systematic contamination.
+
+
 Strict requirements are now: 'cython', 'numpy', 'scipy', 'pmesh', 'kdcount', 'cosmoprimo', 'pypower', 'psutil'
 
 
