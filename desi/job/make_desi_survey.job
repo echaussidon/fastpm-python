@@ -1,0 +1,41 @@
+#!/bin/bash
+# sbatch launch.sh
+
+#SBATCH --nodes=8
+#SBATCH --qos=debug
+#SBATCH --time=00:30:00
+#SBATCH --constraint=haswell
+#SBTACH --account=desi
+
+#SBATCH --job-name=survey
+#SBATCH --output="log/%x-%j.out"
+
+# Timer initialisation:
+SECONDS=0
+
+nproc=512
+export OMP_NUM_THREADS=1
+
+
+echo
+srun -n $nproc -c $OMP_NUM_THREADS \
+     python $HOME/Software/fastpm-python/desi/script/make_desi_survey.py --sim $1 --aout $2 --release $3 --regions $4 --npasses $5 \
+                                                                         --generate_randoms $6 --name_randoms $7 \
+                                                                         --generate_contamination $8 --name_contamination $9 \
+                                                                         --seed_data ${10} --seed_randoms ${11}
+
+
+echo
+if (( $SECONDS > 3600 )); then
+    let "hours=SECONDS/3600"
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $hours hour(s), $minutes minute(s) and $seconds second(s)"
+elif (( $SECONDS > 60 )); then
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $minutes minute(s) and $seconds second(s)"
+else
+    echo "Completed in $SECONDS seconds"
+fi
+echo

@@ -1,0 +1,59 @@
+#!/bin/bash
+# sbatch launch.sh
+
+#SBATCH --nodes=8
+#SBATCH --qos=debug
+#SBATCH --time=00:30:00
+#SBATCH --constraint=haswell
+#SBTACH --account=desi
+
+#SBATCH --job-name=test-fa-fnl-rp
+#SBATCH --output="log/%x-%j.out"
+
+# Timer initialisation:
+SECONDS=0
+
+nproc=512
+export OMP_NUM_THREADS=1
+
+sim_name='run-knl-3-fnl-0'
+aout='0.3636'
+release='Y1'
+region='SSGC'
+name_randoms='run-knl-3-randoms'
+name_contamination='run-knl-3-contamination'
+seed='31'
+add_fake_stars='True'
+
+#sim_name='run-knl-3-fnl-25'
+#seed='75'
+
+echo
+srun -n $nproc -c $OMP_NUM_THREADS \
+     python $HOME/Software/fastpm-python/desi/script/apply_fa_test.py --sim $sim_name --aout $aout --release $release --regions $region \
+                                                                      --name_randoms $name_randoms --name_contamination $name_contamination\
+                                                                      --add_fake_stars $add_fake_stars\
+                                                                      --seed $seed
+
+echo
+if (( $SECONDS > 3600 )); then
+    let "hours=SECONDS/3600"
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $hours hour(s), $minutes minute(s) and $seconds second(s)"
+elif (( $SECONDS > 60 )); then
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $minutes minute(s) and $seconds second(s)"
+else
+    echo "Completed in $SECONDS seconds"
+fi
+echo
+
+## OU ALORS INTERACTIF
+
+# salloc -N 8 -C haswell -t 04:00:00 --qos interactive -L SCRATCH,project
+
+# srun -n 512 -c 1 python apply_fa_test.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SSGC --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee name.log
+
+# srun -n 512 -c 1 python apply_fa_test.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SNGC --npasses 3 --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee 3pass-test-n.log
