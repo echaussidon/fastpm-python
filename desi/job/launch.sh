@@ -12,7 +12,7 @@ fnl_25=$2
 sim_name='run-knl-3-fnl-0'
 aout_list=("0.3636")   # ("0.2857" "0.3076" "0.3333" "0.3636" "0.4000")
 release='Y1'
-region='SSGC'
+region='SNGC'
 npasses='1' # pixels with at least # pass >= npasses --> 1 gives all the observable footprint
 generate_randoms='True'
 name_randoms='run-knl-3-randoms'
