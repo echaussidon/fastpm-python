@@ -43,6 +43,9 @@ def collect_argparser():
     parser.add_argument("--name_randoms", type=str, required=False, default='fastpm-randoms',
                         help='Each region is be saved in one dataset.')
 
+    parser.add_argument("--boxsizes", nargs='+', type=int, required=False, default=[200000, 50000, 20000],
+                        help="Compute the window matrix with different boxsizes to concatenate it ! (Increase a lot the accuracy)")
+
     return parser.parse_args()
 
 
@@ -95,9 +98,8 @@ if __name__ == '__main__':
         # la window doit être normalisée par le même facteur que le pk
         poles = PowerSpectrumStatistics.load(os.path.join(sim, f'power-spectrum/desi-cutsky-{dataset}-0.npy'))
         start = MPI.Wtime()
-        boxsizes = [200000., 50000., 20000.]
-        for boxsize in boxsizes:
+        for boxsize in args.boxsizes:
             window = CatalogSmoothWindow(randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']], position_type='rdd',
                                          power_ref=poles, edges={'step': 1e-4}, boxsize=boxsize,
                                          mpicomm=mpicomm).poles.save(os.path.join(args.path_to_sim, args.name_randoms, f'window-matrix/window_matrix_boxisze-{boxsize}_{dataset}.npy'))
-        logger_info(logger, f'CatalogFFTPower done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
+        logger_info(logger, f'Window matrix computation for {len(args.boxsizes)} boxsize done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
