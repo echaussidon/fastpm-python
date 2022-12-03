@@ -96,10 +96,12 @@ if __name__ == '__main__':
 
         # Load reference poles:
         # la window doit être normalisée par le même facteur que le pk
-        poles = PowerSpectrumStatistics.load(os.path.join(sim, f'power-spectrum/desi-cutsky-{dataset}-0.npy'))
+        power = PowerSpectrumStatistics.load(os.path.join(sim, f'power-spectrum/desi-cutsky-{dataset}-0.npy')) if mpicomm.rank == 0 else 0
+        power = mpicomm.bcast(power, root=0)
+
         start = MPI.Wtime()
         for boxsize in args.boxsizes:
             window = CatalogSmoothWindow(randoms_positions1=[randoms['RA'], randoms['DEC'], randoms['DISTANCE']], position_type='rdd',
-                                         power_ref=poles, edges={'step': 1e-4}, boxsize=boxsize,
+                                         power_ref=power, edges={'step': 1e-4}, boxsize=boxsize,
                                          mpicomm=mpicomm).poles.save(os.path.join(args.path_to_sim, args.name_randoms, f'window-matrix/window_matrix_boxisze-{boxsize}_{dataset}.npy'))
         logger_info(logger, f'Window matrix computation for {len(args.boxsizes)} boxsize done with cont in {MPI.Wtime() - start:2.2f} s.', rank)
