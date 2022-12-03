@@ -1,0 +1,44 @@
+#!/bin/bash
+# sbatch launch.sh
+
+#SBATCH --nodes=10
+#SBATCH --qos=debug
+#SBATCH --time=00:30:00
+#SBATCH --constraint=haswell
+#SBTACH --account=desi
+
+#SBATCH --job-name=blinding
+#SBATCH --output="log/%x-%j.out"
+
+# Timer initialisation:
+SECONDS=0
+
+nproc=640
+export OMP_NUM_THREADS=1
+
+sim_name='run-knl-3-fnl-0'
+aout='0.3636'
+release='Y1'
+region='SSGC'
+npasses='1'
+name_randoms='run-knl-3-randoms'
+boxsize_list=('200000', '50000', '20000')
+
+
+srun -n $nproc -c $OMP_NUM_THREADS \
+       python $HOME/Software/fastpm-python/desi/script/apply_blinding.py --sim $sim_name --aout $aout --release $release --regions $region --npasses $npasses --name_randoms $name_randoms
+
+
+if (( $SECONDS > 3600 )); then
+    let "hours=SECONDS/3600"
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $hours hour(s), $minutes minute(s) and $seconds second(s)"
+elif (( $SECONDS > 60 )); then
+    let "minutes=(SECONDS%3600)/60"
+    let "seconds=(SECONDS%3600)%60"
+    echo "Completed in $minutes minute(s) and $seconds second(s)"
+else
+    echo "Completed in $SECONDS seconds"
+fi
+echo

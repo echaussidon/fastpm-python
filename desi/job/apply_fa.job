@@ -30,7 +30,7 @@ add_fake_stars='True'
 
 echo
 srun -n $nproc -c $OMP_NUM_THREADS \
-     python $HOME/Software/fastpm-python/desi/script/apply_fa_test.py --sim $sim_name --aout $aout --release $release --regions $region \
+     python $HOME/Software/fastpm-python/desi/script/apply_fa.py --sim $sim_name --aout $aout --release $release --regions $region \
                                                                       --name_randoms $name_randoms --name_contamination $name_contamination\
                                                                       --add_fake_stars $add_fake_stars\
                                                                       --seed $seed
@@ -54,6 +54,6 @@ echo
 
 # salloc -N 8 -C haswell -t 04:00:00 --qos interactive -L SCRATCH,project
 
-# srun -n 512 -c 1 python apply_fa_test.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SSGC --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee name.log
+# srun -n 512 -c 1 python apply_fa.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SSGC --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee name.log
 
-# srun -n 512 -c 1 python apply_fa_test.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SNGC --npasses 3 --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee 3pass-test-n.log
+# srun -n 512 -c 1 python apply_fa.py --sim run-knl-3-fnl-0 --aout 0.3636 --release Y1 --regions SNGC --npasses 3 --name_randoms run-knl-3-randoms --name_contamination run-knl-3-contamination --seed 31 | tee 3pass-test-n.log
