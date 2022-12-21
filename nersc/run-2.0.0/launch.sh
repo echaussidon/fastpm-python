@@ -1,7 +1,17 @@
 #!/bin/bash
-# ./launch.sh
 
-# launch fastpm then hall the post_processing treatment (halos finder + subsampler ect)
+# launch fastpm then all the post_processing treatment (halos finder + subsampler ect)
+
+## For this size you need to ask an increase scratch quotas (typically 100 Tb)
+## You need to change sim_name and $DIR which is define in all the job (if not running in my scratch)
+## Do not forget to update the config.py file
+
+## When you are ready:
+## chmod u+x launch.sh
+## ./launch.sh
+## when all the jobs are done: ./seff-and-clean.sh
+
+## Do not forget to save the simulation in the CFS and in feynmann
 
 sim_name='run-knl-3-fnl-TODO'
 aout_list=("0.2857" "0.3076" "0.3333" "0.3636" "0.4000")

@@ -2,7 +2,7 @@
 
 #SBATCH --image=edmondchau/fastpm-python:latest
 #SBATCH --nodes=1600
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
 #SBATCH --constraint=knl
 #SBATCH --qos=regular
 #SBTACH --account=desi
@@ -35,7 +35,7 @@ then
     echo
     srun -n $nproc -c $OMP_NUM_THREADS --cpu-bind=cores shifter \
          python -m fastpm.post_processing --sim $1 --aout $2 \
-                                          --compute_power False --subsampling True --compute_halos False \
+                                          --compute_power True --subsampling True --compute_halos False \
                                           --nmesh 2048 --k_min 1e-3 --k_max 1.5e0 --kbin 1e-3 \
                                           --subsampling_nbr 102 --delet_original True
     echo
