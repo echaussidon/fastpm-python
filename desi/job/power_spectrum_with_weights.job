@@ -3,7 +3,7 @@
 
 #SBATCH --nodes=2
 #SBATCH --qos=regular
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --constraint=cpu
 #SBTACH --account=desi
 
@@ -20,7 +20,11 @@ export OMP_NUM_THREADS=1
 
 srun -n $nproc -c $OMP_NUM_THREADS \
        python $HOME/Software/fastpm-python/desi/script/power_spectrum.py --sim $1 --aout $2 --release $3 --regions $4 --npasses $5 --name_randoms $6\
-                                                                         --compute_ini $7 --compute_inicorr $8 --compute_cont $9 --compute_corr ${10}
+                                                                         --compute_ini $7 --compute_inicorr $8 --compute_cont $9 --compute_corr ${10} --use_fkp True
+                                                                         
+srun -n $nproc -c $OMP_NUM_THREADS \
+       python $HOME/Software/fastpm-python/desi/script/power_spectrum.py --sim $1 --aout $2 --release $3 --regions $4 --npasses $5 --name_randoms $6\
+                                                                         --compute_ini $7 --compute_inicorr $8 --compute_cont $9 --compute_corr ${10} --use_oqe True
                                                                          
 
 if (( $SECONDS > 3600 )); then

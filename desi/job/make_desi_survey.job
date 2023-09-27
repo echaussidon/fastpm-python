@@ -1,10 +1,10 @@
 #!/bin/bash
 # sbatch launch.sh
 
-#SBATCH --nodes=8
-#SBATCH --qos=debug
+#SBATCH --nodes=4
+#SBATCH --qos=regular
 #SBATCH --time=00:30:00
-#SBATCH --constraint=haswell
+#SBATCH --constraint=cpu
 #SBTACH --account=desi
 
 #SBATCH --job-name=survey

@@ -1,10 +1,10 @@
 #!/bin/bash
 # sbatch launch.sh
 
-#SBATCH --nodes=30
-#SBATCH --qos=debug
-#SBATCH --time=00:30:00
-#SBATCH --constraint=haswell
+#SBATCH --nodes=6
+#SBATCH --qos=regular
+#SBATCH --time=02:00:00
+#SBATCH --constraint=cpu
 #SBTACH --account=desi
 
 #SBATCH --job-name=window
@@ -19,11 +19,11 @@ release='Y1'
 region='SSGC'
 npasses='1'
 name_randoms='run-knl-3-randoms'
-boxsize_list=('200000', '50000', '20000')
+boxsize_list=('200000' '50000' '20000')
 
 echo
 for boxsize in ${boxsize_list[@]}; do
-    srun --exclusive -N 10 -n 640 -c 1 \
+    srun --exclusive -N 2 -n 256 -c 1 \
          python $HOME/Software/fastpm-python/desi/script/compute_window_matrix.py --sim $sim_name --aout $aout --release $release --regions $region --npasses $npasses\
                                                                                   --name_randoms $name_randoms --boxsizes $boxsize &
 done

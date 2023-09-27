@@ -8,6 +8,10 @@ import numpy as np
 logger = logging.getLogger('Compute Window matrix')
 
 
+# disable jax warning:
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
+
+
 # To avoid error from NUMEXPR Package
 os.environ.setdefault('NUMEXPR_MAX_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
 os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
@@ -20,9 +24,9 @@ def logger_info(logger, msg, rank, mpiroot=0):
 
 
 def collect_argparser():
-    parser = argparse.ArgumentParser(description="Transform position in real space to redshift space and compute the multipoles.")
+    parser = argparse.ArgumentParser(description="Compute the window matrix with the randoms")
 
-    parser.add_argument("--path_to_sim", type=str, required=False, default='/global/u2/e/edmondc/Scratch/Mocks/',
+    parser.add_argument("--path_to_sim", type=str, required=False, default='/pscratch/sd/e/edmondc/Mocks/',
                         help="Path to the Scratch where the simulations are saved")
     parser.add_argument("--sim", type=str, required=False, default='test',
                         help="Simulation name (e.g) fastpm-fnl-0")

@@ -12,6 +12,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(mockfactory.__fi
 logger = logging.getLogger('Make Survey')
 
 
+# disable jax warning:
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
+
+
 # To avoid error from NUMEXPR Package
 os.environ.setdefault('NUMEXPR_MAX_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
 os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
@@ -20,7 +24,7 @@ os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Transform position in real space to redshift space and compute the multipoles.")
 
-    parser.add_argument("--path_to_sim", type=str, required=False, default='/global/u2/e/edmondc/Scratch/Mocks/',
+    parser.add_argument("--path_to_sim", type=str, required=False, default='/pscratch/sd/e/edmondc/Mocks/',
                         help="Path to the Scratch where the simulations are saved")
     parser.add_argument("--sim", type=str, required=False, default='test',
                         help="Simulation name (e.g) fastpm-fnl-0")
@@ -29,9 +33,9 @@ def collect_argparser():
 
     parser.add_argument("--zmin", type=float, required=False, default=0.8,
                         help="minimal redshift cut")
-    parser.add_argument("--zmax", type=float, required=False, default=2.65,
+    parser.add_argument("--zmax", type=float, required=False, default=3.1,
                         help="maximum redshift cut. Reduce zmax to increase the sky coverage of the cutsky. 2.65 recovers all SNGC and SSGC and a large fraction of N. 3.5 recovers almost only SSGC.")
-    parser.add_argument("--nz_filename", type=str, required=False, default='/global/homes/e/edmondc/Software/desi_ec/Data/nz_qso_final.dat',
+    parser.add_argument("--nz_filename", type=str, required=False, default='/global/homes/e/edmondc/Software/fastpm-python/desi/script/data/nz_qso_final.dat',
                         help="where is saved the nz.dat file")
     parser.add_argument("--seed_data", type=int, required=False, default=28,
                         help="Set the seed for reproductibility when we match the n(z). \
@@ -46,21 +50,24 @@ def collect_argparser():
     parser.add_argument("--regions", nargs='+', type=str, required=False, default=['N', 'SNGC', 'SSGC'],
                         help="photometric regions")
 
-    parser.add_argument("--maskbits", nargs='+', type=int, required=False, default=[1, 12, 13],
-                        help="DR9 maskbits used to cut the data and the randoms, default=[1, 12, 13].\
+    parser.add_argument("--maskbits", nargs='+', type=int, required=False, default=[1, 7, 8, 11, 12, 13],
+                        help="DR9 maskbits used to cut the data and the randoms, default=[1, 7, 8, 9, 12, 13].\
                               The default one mimicking the maskbits used during the Target Selection.")
 
-    parser.add_argument("--expected_density", type=float, required=False, default=200,
-                        help='Expected mock density in deg^-2 to match the real data. ~ 200 for QSO.\
-                              Next generation: TODO --> have an healpix map to include imaging systematics')
+    parser.add_argument("--expected_density", type=float, required=False, default=188,
+                        help='Expected mock density in deg^-2 to match the real data. ~ 203 for QSO all z --> (0.8, 3.1) = 90.66%')
     parser.add_argument("--expected_density_for_cont", type=float, required=False, default=280,
                         help='Expected mock density in deg^-2 before systematic contamination. Typically, 1.4*n_obs is enough.')
+
+    parser.add_argument("--apply_completeness", type=str, required=False, default='True', help='If true apply completeness, do not generate stars sample (used for the F.A. so...)!')
+    parser.add_argument("--dir_completeness_map", type=str, required=False, default='/global/homes/e/edmondc/Software/fastpm-python/desi/script/data/',
+                        help='Directoryy containing the Healpix map containing the completeness of the release')
 
     parser.add_argument("--generate_randoms", type=str, required=False, default='False',
                         help="if 'True' generate associated randoms for the expected density cutsky.")
     parser.add_argument("--generate_contamination", type=str, required=False, default='False',
                         help="if 'True' generate associated stellar contamination (following the trends from the Main target density).\
-                              expected density + contamination should be similar to Main target density.")
+                              expected density + contamination should be similar to Main target density. do not use it if we apply completeness")
     parser.add_argument("--seed_randoms", type=int, required=False, default=36,
                         help="Set the seed for reproductibility when we generate associated randoms \
                               seeds_randoms = {'N': args.seed_randoms, 'SNGC': args.seed_random + 1, 'SSGC': args.seed_random + 2}")
@@ -76,7 +83,7 @@ if __name__ == '__main__':
     """ This file is design to be launched with survey.sh"""
     from fastpm.io import BigFile
 
-    from mockfactory import BoxCatalog, setup_logging
+    from mockfactory import BoxCatalog, setup_logging, HealpixAngularMask
     from mockfactory.desi import get_brick_pixel_quantities
 
     from from_box_to_desi_cutsky import remap_the_box, apply_rsd_and_cutsky, \
@@ -110,6 +117,10 @@ if __name__ == '__main__':
     # Fix seed on each photometric region for reproductibility
     seeds_data = {region: args.seed_data + i for i, region in enumerate(['N', 'SNGC', 'SSGC'])}
     seeds_randoms = {region: args.seed_randoms + i for i, region in enumerate(['N', 'SNGC', 'SSGC'])}
+
+    # Load completeness mask:
+    # define mask to mimick completeness for the considered release: Sould be applied for randoms and data !
+    comp_mask = HealpixAngularMask(np.load(os.path.join(args.dir_completeness_map, f'completeness-map-{args.release}.npy')), nest=True)
 
     # Load halos catalog and build Boxcatalog:
     start = MPI.Wtime()
@@ -182,6 +193,11 @@ if __name__ == '__main__':
         desi_cutsky = desi_cutsky[sel]
         logger_info(logger, f"Collect DR9 maskbits and apply: {args.maskbits} maskbits done in {MPI.Wtime() - start:2.2f} s.", rank)
 
+        if args.apply_completeness == 'True':
+            # apply completeness:
+            desi_cutsky = desi_cutsky[comp_mask(desi_cutsky['RA'], desi_cutsky['DEC'], seed=seeds_data[region] * 26)]
+            logger_info(logger, 'Apply completeness for the data', rank)
+
         # save desi_cutsky into the same bigfile --> N / SNGC / SSGC
         start = MPI.Wtime()
         mock = BigFile(os.path.join(sim, f'desi-cutsky-{args.aout}'), dataset=dataset, mode='w', mpicomm=mpicomm)
@@ -190,6 +206,54 @@ if __name__ == '__main__':
                     'MASKBITS': desi_cutsky['MASKBITS'], 'NMOCK': desi_cutsky['NMOCK'], 'IS_FOR_UNCONT': desi_cutsky['IS_FOR_UNCONT'],
                     'DISTANCE': desi_cutsky['DISTANCE'], 'HPX': desi_cutsky['HPX']})
         logger_info(logger, f"Save done in {MPI.Wtime() - start:2.2f} s.\n", rank)
+
+        if args.generate_randoms == 'True':
+            # generate associated randoms:
+            from mockfactory import RandomCutskyCatalog, box_to_cutsky
+
+            # To compute the 'fracarea' (incl. DR9 maskbits, completeness ect...), we need to know the sky density of the randoms.
+            # Instead of given the number of randoms = int(cutsky.csize * nrand_over_data + 0.5) to  RandomCutskyCatalog
+            # We give nbar = 100 * expected_density (we want 10 times more randoms but here they are 15-18 subsample ...)
+            # Use 100 more in order to compute the power spectrum of the full sample
+            randoms_density = 100 * args.expected_density
+
+            # collect limit for the cone
+            _, rarange, decrange = box_to_cutsky(box.boxsize, z2chi(args.zmax), dmin=z2chi(args.zmin))
+            logger_info(logger, f'Generate randoms for region={region} with seed={seeds_randoms[region]}', rank)
+
+            # Generate randoms with in the cutsky
+            start = MPI.Wtime()
+            randoms = RandomCutskyCatalog(rarange=center_ra + np.array(rarange), decrange=center_dec + np.array(decrange), nbar=randoms_density, seed=seeds_randoms[region], mpicomm=mpicomm)
+            logger_info(logger, f"RandomCutsky done in {MPI.Wtime() - start:2.2f} s.", rank)
+
+            # match the desi footprint and apply the DR9 mask
+            start = MPI.Wtime()
+            randoms = apply_photo_desi_footprint(randoms, region, args.release, args.program, npasses=args.npasses, rank=rank)
+            randoms['MASKBITS'] = get_brick_pixel_quantities(randoms['RA'], randoms['DEC'], add_brick_quantities, mpicomm=mpicomm)['maskbits']
+            # keep only objects without maskbits
+            sel = np.ones(randoms.size, dtype=bool)
+            for mskb in args.maskbits:
+                sel &= (randoms['MASKBITS'] & 2**mskb) == 0
+            randoms = randoms[sel]
+            logger_info(logger, f"Match region: {region} and release footprint: {args.release}-{args.program}-{args.npasses} + apply DR9 maskbits: {args.maskbits} done in {MPI.Wtime() - start:2.2f} s.", rank)
+
+            # use the naive implementation of mockfactory/make_survey/BaseRadialMask
+            # draw numbers according to a uniform law until to find enough correct numbers
+            # basically, this is the so-called 'methode du rejet'
+            randoms['Z'] = generate_redshifts(randoms.size, args.zmin, args.zmax, nz_filename=args.nz_filename, cosmo=cosmo, seed=seeds_randoms[region] * 276)
+
+            if args.apply_completeness == 'True':
+                # apply completeness:
+                randoms = randoms[comp_mask(randoms['RA'], randoms['DEC'], seed=seeds_randoms[region] * 26)]
+                logger_info(logger, 'Apply completeness for the Randoms', rank)
+
+            # save randoms
+            start = MPI.Wtime()
+            generated_randoms = BigFile(os.path.join(args.path_to_sim, args.name_randoms), dataset=dataset, mode='w', mpicomm=mpicomm)
+            generated_randoms.attrs = {'randoms_density': randoms_density}
+            generated_randoms.write({'RA': randoms['RA'], 'DEC': randoms['DEC'], 'Z': randoms['Z'],
+                                    'MASKBITS': randoms['MASKBITS'], 'HPX': randoms['HPX']})
+            logger_info(logger, f"Save done in {MPI.Wtime() - start:2.2f} s.\n", rank)
 
         if args.generate_contamination == 'True':
             # generate associated contamination: target density - expected density
@@ -224,47 +288,6 @@ if __name__ == '__main__':
             generated_randoms = BigFile(os.path.join(args.path_to_sim, args.name_contamination), dataset=dataset, mode='w', mpicomm=mpicomm)
             generated_randoms.write({'RA': contamination['RA'], 'DEC': contamination['DEC'],
                                     'MASKBITS': contamination['MASKBITS'], 'HPX': contamination['HPX']})
-            logger_info(logger, f"Save done in {MPI.Wtime() - start:2.2f} s.\n", rank)
-
-        if args.generate_randoms == 'True':
-            # generate associated randoms:
-            from mockfactory import RandomCutskyCatalog, box_to_cutsky
-
-            # We want 10 times more than the cutsky mock
-            # here we generate 10 times more than the full sample to be able to compute the power spectrum of the full sample
-            nrand_over_data = 10
-            # Since random are generated not directly on DESI footprint, we take the size of cutsky and not desi_cutsky
-            nbr_randoms = int(cutsky.csize * nrand_over_data + 0.5)
-            # collect limit for the cone
-            _, rarange, decrange = box_to_cutsky(box.boxsize, z2chi(args.zmax), dmin=z2chi(args.zmin))
-            logger_info(logger, f'Generate randoms for region={region} with seed={seeds_randoms[region]}', rank)
-
-            # Generate randoms with in the cutsky
-            start = MPI.Wtime()
-            randoms = RandomCutskyCatalog(rarange=center_ra + np.array(rarange), decrange=center_dec + np.array(decrange), csize=nbr_randoms, seed=seeds_randoms[region], mpicomm=mpicomm)
-            logger_info(logger, f"RandomCutsky done in {MPI.Wtime() - start:2.2f} s.", rank)
-
-            # match the desi footprint and apply the DR9 mask
-            start = MPI.Wtime()
-            randoms = apply_photo_desi_footprint(randoms, region, args.release, args.program, npasses=args.npasses, rank=rank)
-            randoms['MASKBITS'] = get_brick_pixel_quantities(randoms['RA'], randoms['DEC'], add_brick_quantities, mpicomm=mpicomm)['maskbits']
-            # keep only objects without maskbits
-            sel = np.ones(randoms.size, dtype=bool)
-            for mskb in args.maskbits:
-                sel &= (randoms['MASKBITS'] & 2**mskb) == 0
-            randoms = randoms[sel]
-            logger_info(logger, f"Match region: {region} and release footprint: {args.release}-{args.program}-{args.npasses} + apply DR9 maskbits: {args.maskbits} done in {MPI.Wtime() - start:2.2f} s.", rank)
-
-            # use the naive implementation of mockfactory/make_survey/BaseRadialMask
-            # draw numbers according to a uniform law until to find enough correct numbers
-            # basically, this is the so-called 'methode du rejet'
-            randoms['Z'] = generate_redshifts(randoms.size, args.zmin, args.zmax, nz_filename=args.nz_filename, cosmo=cosmo, seed=seeds_randoms[region] * 276)
-
-            # save randoms
-            start = MPI.Wtime()
-            generated_randoms = BigFile(os.path.join(args.path_to_sim, args.name_randoms), dataset=dataset, mode='w', mpicomm=mpicomm)
-            generated_randoms.write({'RA': randoms['RA'], 'DEC': randoms['DEC'], 'Z': randoms['Z'],
-                                    'MASKBITS': randoms['MASKBITS'], 'HPX': randoms['HPX']})
             logger_info(logger, f"Save done in {MPI.Wtime() - start:2.2f} s.\n", rank)
 
     logger_info(logger, f"Make survey took {MPI.Wtime() - start_ini:2.2f} s.", rank)

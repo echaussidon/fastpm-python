@@ -9,6 +9,10 @@ import numpy as np
 logger = logging.getLogger('Apply F.A.')
 
 
+# disable jax warning:
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
+
+
 # To avoid error from NUMEXPR Package
 os.environ.setdefault('NUMEXPR_MAX_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
 os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
@@ -46,7 +50,7 @@ def add_info_for_fa(catalog, desi_target=2**2, obscondition=3, numobs=1, offset=
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Transform position in real space to redshift space and compute the multipoles.")
 
-    parser.add_argument("--path_to_sim", type=str, required=False, default='/global/u2/e/edmondc/Scratch/Mocks/',
+    parser.add_argument("--path_to_sim", type=str, required=False, default='/pscratch/sd/e/edmondc/Mocks/',
                         help="Path to the Scratch where the simulations are saved")
     parser.add_argument("--sim", type=str, required=False, default='test',
                         help="Simulation name (e.g) fastpm-fnl-0")
@@ -100,7 +104,7 @@ if __name__ == '__main__':
     sim = os.path.join(args.path_to_sim, args.sim)
 
     # Some parameter, for quick changes --> when the scprit is ready add it in the argparse !
-    compute_power_wo_comp, compute_power, compute_wp, compute_wtheta = False, False, True, False
+    compute_power_wo_comp, compute_power, compute_wp, compute_wtheta = True, True, False, False
     use_sky_targets, preload_sky_targets = True, True
     add_fake_stars = args.add_fake_stars == 'True'
     nmock_ini, max_nmock = 0, 16
@@ -120,7 +124,7 @@ if __name__ == '__main__':
     # F.A. info:
     npasses = 7
     # Collect tiles from surveyops directory on which the fiber assignment will be applied
-    tiles = build_tiles_for_fa(release_tile_path=f'/global/cfs/cdirs/desi/survey/catalogs/{args.release}/LSS/tiles-DARK.fits', program='dark', npasses=npasses)
+    tiles = build_tiles_for_fa(release_tile_path=f'/global/cfs/cdirs/desi/survey/catalogs/{args.release}/LSS/tiles-DARK.fits', program='dark', npasses=npasses)  
     # Get info from origin fiberassign file and setup options for F.A. (see fiberassign.scripts.assign.parse_assign to modify margins, number of sky fibers for each petal ect...)
     ts = str(tiles['TILEID'][0]).zfill(6)
     fht = fitsio.read_header(f'/global/cfs/cdirs/desi/target/fiberassign/tiles/trunk/{ts[:3]}/fiberassign-{ts}.fits.gz')

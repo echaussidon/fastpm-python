@@ -13,6 +13,10 @@ from regressis.mocks import create_flag_imaging_systematic
 logger = logging.getLogger('Imaging Systematics')
 
 
+# disable jax warning:
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
+
+
 # To avoid error from NUMEXPR Package
 os.environ.setdefault('NUMEXPR_MAX_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
 os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '1'))
@@ -21,7 +25,7 @@ os.environ.setdefault('NUMEXPR_NUM_THREADS', os.environ.get('OMP_NUM_THREADS', '
 def collect_argparser():
     parser = argparse.ArgumentParser(description="Apply imaging systematics and uncontaminate the mocks.")
 
-    parser.add_argument("--path_to_sim", type=str, required=False, default='/global/u2/e/edmondc/Scratch/Mocks/',
+    parser.add_argument("--path_to_sim", type=str, required=False, default='/pscratch/sd/e/edmondc/Mocks/',
                         help="Path to the Scratch where the simulations are saved")
     parser.add_argument("--sim", type=str, required=False, default='test',
                         help="Simulation name (e.g) fastpm-fnl-0")
@@ -66,6 +70,10 @@ def apply_imaging_systematics(cutsky, sel, fracarea, nside=256, seed=946, fix_de
     mock_footprint[cutsky['HPX'][sel]] += 1
     mock_footprint = mock_footprint > 0
 
+    if mock_footprint[np.isnan(fracarea)].sum() > 0:
+        logger.warning(f'There is {mock_footprint[np.isnan(fracarea)].sum()} pixels with data but no-randoms ... Remove the data --> No probleme if it is typically one')
+        mock_footprint &= ~np.isnan(fracarea)
+
     for region in wsys.regions:
         wsys.mask_region[region] &= mock_footprint
 
@@ -75,7 +83,7 @@ def apply_imaging_systematics(cutsky, sel, fracarea, nside=256, seed=946, fix_de
         logger.warning("ATTENTION ON FIXE A LA MAIN LA DENSITE car on a que le wsys des targets")
         wsys.mean_density_region = {region: 10.5 for region in wsys.regions}
 
-    _, is_wsys_cont, _ = create_flag_imaging_systematic(cutsky, sel, wsys, fracarea, use_real_density=True, seed=seed)
+    _, is_wsys_cont, _ = create_flag_imaging_systematic(cutsky, sel, wsys, fracarea, pix_number=cutsky['HPX'], use_real_density=True, seed=seed)
 
     # is_wsys_cont is size of cutsky.size --> return only is_wsys_cont[sel] to work with one sub-sample
     return is_wsys_cont[sel]
@@ -134,14 +142,15 @@ if __name__ == '__main__':
         logger.error('Regressis is not design to work with MPI ! Please run this script with -n 1')
         sys.exit(1)
 
+    # take care we generate the healpix number in make_desi_survey.py at nside=256
     nside = 256
 
     if args.which_contamination == 'TS':
-        wsys_path_cont = f'/global/cfs/cdirs/desi/users/edmondc/sys_weight/photo/MAIN_QSO_imaging_weight_{nside}.npy'
+        wsys_path_cont = f'/global/homes/e/edmondc/Software/fastpm-python/desi/script/data/MAIN_QSO_imaging_weight_{nside}.npy'
         fix_density = True
     elif args.which_contamination == 'Y1':
-        wsys_path_cont = f'/global/homes/e/edmondc/Clustering/Y1/Y1_QSO_256/RF/Y1_QSO_imaging_weight_{nside}.npy'
-        fix_density = True
+        wsys_path_cont = f'/global/homes/e/edmondc/Software/fastpm-python/desi/script/data/Y1_QSO_ssgc_imaging_weight_{nside}.npy'
+        fix_density = False
     else:
         logger.error('Please choose correct flag for which contamination')
         sys.exit(1)
@@ -155,13 +164,12 @@ if __name__ == '__main__':
         # Load randoms:
         start = MPI.Wtime()
         randoms = BigFile(os.path.join(args.path_to_sim, args.name_randoms), dataset=dataset, mode='r', mpicomm=mpicomm)
+        randoms_density = randoms.attrs['randoms_density']
         randoms.RA, randoms.DEC, randoms.HPX = randoms.read('RA'), randoms.read('DEC'), randoms.read('HPX')
         # compute randoms healpix map to build fracarea
         randoms_map = build_healpix_map(nside, randoms['RA'], randoms['DEC'], precomputed_pix=randoms['HPX'], in_deg2=True)
-        sel = randoms_map > 0
-        randoms_density = np.mean(randoms_map[sel])
         fracarea = randoms_map / randoms_density
-        fracarea[~sel] = np.nan
+        fracarea[~(randoms_map > 0)] = np.nan
         logger.info(f"Load randoms and compute fracarea done in {MPI.Wtime() - start:2.2f} s.")
 
         # Load data:
@@ -169,10 +177,12 @@ if __name__ == '__main__':
         cutsky = BigFile(os.path.join(sim, f'desi-cutsky-{args.aout}'), dataset=dataset, mode='rw', mpicomm=mpicomm)
         cutsky.RA, cutsky.DEC, cutsky.Z = cutsky.read('RA'), cutsky.read('DEC'), cutsky.read('Z')
         cutsky.NMOCK, cutsky.HPX = cutsky.read('NMOCK'), cutsky.read('HPX')
+        is_for_uncont = cutsky.read('IS_FOR_UNCONT')
         logger.info(f"Number of galaxies: {cutsky.csize} read in {MPI.Wtime() - start:2.2f} s.")
 
         # Apply systematics contamination and apply the correction
         start = MPI.Wtime()
+        sys_weight_ini = np.nan * np.ones(cutsky.size)
         is_wsys_cont, sys_weight = np.ones(cutsky.size, dtype='bool'), np.nan * np.ones(cutsky.size)
 
         # Collect the number of subsample available in cutsky, take care all ranks do not have all the subsample, need to collect it across all the ranks!
@@ -180,10 +190,17 @@ if __name__ == '__main__':
         max_nmock = mpicomm.bcast(max_nmock, root=0)
         for num in range(max_nmock):
             sel = cutsky['NMOCK'] == num
-
+            
+            # compute correction on uncontaminted mocks:
+            sys_weight_ini[sel & is_for_uncont] = compute_imaging_systematic_weights(cutsky, sel & is_for_uncont, region, fracarea, nside=256, seed=(seeds[region] + 10) * num, n_jobs=64)
+            
+            # contaminate mocks:
             is_wsys_cont[sel] = apply_imaging_systematics(cutsky, sel, fracarea, seed=seeds[region] + num, fix_density=fix_density, wsys_path=wsys_path_cont)
-
+            
+            # compute correction on contaminated mocks:
             sys_weight[sel & is_wsys_cont] = compute_imaging_systematic_weights(cutsky, sel & is_wsys_cont, region, fracarea, nside=256, seed=(seeds[region] + 10) * num, n_jobs=64)
+        
+        cutsky.write({'WSYS_INI': sys_weight_ini})
         cutsky.write({'IS_WSYS_CONT': is_wsys_cont, 'WSYS': sys_weight})
 
         logger.info(f"Contaminate all subsamples in regions: {args.regions} done in {MPI.Wtime() - start:2.2f} s.")
